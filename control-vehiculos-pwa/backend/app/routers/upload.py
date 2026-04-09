@@ -16,6 +16,5 @@ def upload_vehicles(
     try:
         result = import_vehicles(file, db, carrier_id, sector_id)
         return result
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

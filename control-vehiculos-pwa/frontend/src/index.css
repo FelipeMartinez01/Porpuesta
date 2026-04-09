@@ -47,14 +47,6 @@ table {
   font-size: 14px;
 }
 
-@media (max-width: 1024px) {
-  .responsive-stack {
-    display: block;
-  }
-}
-
-@media (max-width: 900px) {
-  body {
-    font-size: 14px;
-  }
+a {
+  color: inherit;
 }
