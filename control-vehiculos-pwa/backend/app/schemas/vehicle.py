@@ -4,7 +4,6 @@ from pydantic import BaseModel, ConfigDict
 
 class VehicleBase(BaseModel):
     vin: str
-    barcode_id: str | None = None
     color: str | None = None
     brand: str | None = None
     model: str | None = None
@@ -23,7 +22,6 @@ class VehicleCreate(VehicleBase):
 
 class VehicleUpdate(BaseModel):
     vin: str | None = None
-    barcode_id: str | None = None
     color: str | None = None
     brand: str | None = None
     model: str | None = None

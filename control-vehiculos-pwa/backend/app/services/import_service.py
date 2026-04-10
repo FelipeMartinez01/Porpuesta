@@ -54,7 +54,7 @@ def import_vehicles(file: UploadFile, db: Session, carrier_id: int, sector_id: i
 
             vehicle = Vehicle(
                 vin=vin,
-                barcode_id=clean_value(row.get("barcode_id")),
+                barcode_id=vin,
                 color=clean_value(row.get("color")),
                 brand=clean_value(row.get("brand")),
                 model=clean_value(row.get("model")),

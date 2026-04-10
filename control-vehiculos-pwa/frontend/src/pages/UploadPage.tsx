@@ -138,10 +138,10 @@ export default function UploadPage() {
         <h2 style={styles.sectionTitle}>Formato esperado del archivo</h2>
         <p>Tu archivo debe tener columnas como estas:</p>
         <div style={styles.codeBlock}>
-          vin | barcode_id | color | brand | model | vehicle_year
+          vin | color | brand | model | vehicle_year
         </div>
         <p>
-          La columna <strong>vin</strong> es obligatoria.
+          La columna <strong>vin</strong> es obligatoria y será usada también como código de barra.
         </p>
       </div>
 

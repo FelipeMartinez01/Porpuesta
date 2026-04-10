@@ -63,7 +63,10 @@ def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)):
 
     validate_relations(db, payload.carrier_id, payload.sector_id, payload.slot_id)
 
-    vehicle = Vehicle(**payload.model_dump())
+    vehicle_data = payload.model_dump()
+    vehicle_data["barcode_id"] = vehicle_data["vin"]
+
+    vehicle = Vehicle(**vehicle_data)
     db.add(vehicle)
     db.commit()
     db.refresh(vehicle)
@@ -131,11 +134,14 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
 
     update_data = payload.model_dump(exclude_unset=True)
 
+    update_data = payload.model_dump(exclude_unset=True)
+
     if "vin" in update_data:
         existing = db.query(Vehicle).filter(Vehicle.vin == update_data["vin"], Vehicle.id != vehicle_id).first()
         if existing:
-            raise HTTPException(status_code=400, detail="Ya existe otro vehículo con ese VIN")
-
+         raise HTTPException(status_code=400, detail="Ya existe otro vehículo con ese VIN")
+        update_data["barcode_id"] = update_data["vin"]
+        
     validate_relations(
         db,
         update_data.get("carrier_id", vehicle.carrier_id),
