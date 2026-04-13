@@ -62,7 +62,17 @@ export default function VehicleDetailCard({ vehicle }: Props) {
   return (
     <div style={styles.card}>
       <h3 style={styles.title}>Detalle del vehículo</h3>
-
+      {vehicle.photo_url ? (
+        <div style={styles.photoBox}>
+          <img
+            src={`http://127.0.0.1:8000/${vehicle.photo_url}`}
+            alt={`Vehículo ${vehicle.vin}`}
+            style={styles.photo}
+          />
+        </div>
+      ) : (
+        <div style={styles.noPhoto}>Sin foto principal</div>
+      )}
       <DetailRow label="ID" value={vehicle.id} />
       <DetailRow label="VIN" value={vehicle.vin} />
       <DetailRow label="Código de barras" value={vehicle.barcode_id ?? "-"} />

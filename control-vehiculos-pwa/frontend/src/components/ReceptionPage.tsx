@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import ReceptionSearch from "../components/ReceptionSearch";
 import ReceptionForm from "../components/ReceptionForm";
 import VinScanner from "../components/VinScanner";
+import VehiclePhotoUpload from "../components/VehiclePhotoUpload";
 import type { Vehicle } from "../types/vehicle";
 import type { ReceptionFormData } from "../types/reception";
 
@@ -198,11 +199,47 @@ export default function ReceptionPage() {
           loading={loading}
         />
       ) : null}
+
+      {vehicle ? (
+        <div style={styles.infoCard}>
+          <h3>Foto del vehículo</h3>
+          <VehiclePhotoUpload
+            vehicleId={vehicle.id}
+            onUploaded={async () => {
+              const updated = await api.get<Vehicle>(`/vehicles/${vehicle.id}`);
+              setVehicle(updated.data);
+              setFormData(mapVehicleToForm(updated.data));
+              alert("Foto actualizada");
+            }}
+          />
+        </div>
+      ) : null}
+
+
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  photoBox: {
+  marginBottom: "16px",
+  },
+  photo: {
+  width: "100%",
+  borderRadius: "12px",
+  border: "1px solid #e5e7eb",
+  objectFit: "cover",
+  maxHeight: "260px",
+  },
+  noPhoto: {
+  marginBottom: "16px",
+  padding: "16px",
+  borderRadius: "12px",
+  background: "#f9fafb",
+  border: "1px dashed #d1d5db",
+  color: "#6b7280",
+  textAlign: "center",
+  },
   page: {
     padding: "24px",
   },
