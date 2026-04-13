@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import ReceptionSearch from "../components/ReceptionSearch";
 import ReceptionForm from "../components/ReceptionForm";
+import VinScanner from "../components/VinScanner";
 import type { Vehicle } from "../types/vehicle";
 import type { ReceptionFormData } from "../types/reception";
 
@@ -19,6 +20,7 @@ function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
 export default function ReceptionPage() {
   const [searchValue, setSearchValue] = useState("");
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [formData, setFormData] = useState<ReceptionFormData>({
     vin: "",
     color: "",
@@ -29,8 +31,8 @@ export default function ReceptionPage() {
   });
   const [loading, setLoading] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchValue.trim()) {
+  const searchVehicle = async (vinValue: string) => {
+    if (!vinValue.trim()) {
       alert("Ingresa un VIN");
       return;
     }
@@ -39,7 +41,7 @@ export default function ReceptionPage() {
       setLoading(true);
 
       const response = await api.get<Vehicle[]>("/vehicles/", {
-        params: { vin: searchValue.trim() },
+        params: { vin: vinValue.trim() },
       });
 
       if (response.data.length === 0) {
@@ -57,6 +59,16 @@ export default function ReceptionPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = async () => {
+    await searchVehicle(searchValue);
+  };
+
+  const handleDetected = async (decodedText: string) => {
+    setScannerOpen(false);
+    setSearchValue(decodedText);
+    await searchVehicle(decodedText);
   };
 
   const handleChange = (field: keyof ReceptionFormData, value: string) => {
@@ -87,6 +99,7 @@ export default function ReceptionPage() {
       const updated = await api.get<Vehicle>(`/vehicles/${vehicle.id}`);
       setVehicle(updated.data);
       setFormData(mapVehicleToForm(updated.data));
+      setSearchValue(updated.data.vin);
 
       alert("Vehículo actualizado correctamente");
     } catch (error) {
@@ -122,6 +135,7 @@ export default function ReceptionPage() {
       const updated = await api.get<Vehicle>(`/vehicles/${vehicle.id}`);
       setVehicle(updated.data);
       setFormData(mapVehicleToForm(updated.data));
+      setSearchValue(updated.data.vin);
 
       alert("Vehículo marcado como EN_TRANSITO");
     } catch (error) {
@@ -136,22 +150,30 @@ export default function ReceptionPage() {
     <div style={styles.page}>
       <h1 style={styles.title}>Recepción</h1>
       <p style={styles.subtitle}>
-        Escanea o ingresa el VIN, edita los datos del vehículo y márcalo en tránsito.
+        Ingresa o escanea el VIN, edita los datos del vehículo y márcalo en tránsito.
       </p>
 
       <ReceptionSearch
         searchValue={searchValue}
         onSearchValueChange={setSearchValue}
         onSearch={handleSearch}
+        onOpenScanner={() => setScannerOpen(true)}
       />
+
+      {scannerOpen ? (
+        <VinScanner
+          onDetected={handleDetected}
+          onClose={() => setScannerOpen(false)}
+        />
+      ) : null}
 
       {vehicle ? (
         <div style={styles.infoCard}>
-          <p><strong>ID:</strong> {vehicle.id}</p>
+          <p><strong>ID interno:</strong> {vehicle.id}</p>
           <p><strong>Estado actual:</strong> {vehicle.status}</p>
           <p><strong>Porteador:</strong> {vehicle.carrier_name ?? "-"}</p>
           <p><strong>Sector:</strong> {vehicle.sector_name ?? "-"}</p>
-          <p><strong>Código de barra:</strong> {vehicle.vin}</p>
+          <p><strong>VIN / Código de barra:</strong> {vehicle.vin}</p>
         </div>
       ) : null}
 
