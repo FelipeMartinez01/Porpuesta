@@ -63,6 +63,10 @@ export default function ReceptionPage() {
 
   const handleSearch = async () => {
     await searchVehicle(searchValue);
+    setTimeout(() => {
+      const input = document.querySelector("input");
+      (input as HTMLInputElement)?.focus();
+    },0);
   };
 
   const handleDetected = async (decodedText: string) => {

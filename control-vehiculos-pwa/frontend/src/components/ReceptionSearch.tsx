@@ -1,3 +1,5 @@
+import { useRef, useEffect } from "react";
+
 type Props = {
   searchValue: string;
   onSearchValueChange: (value: string) => void;
@@ -11,6 +13,13 @@ export default function ReceptionSearch({
   onSearch,
   onOpenScanner,
 }: Props) {
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   return (
     <div style={styles.card}>
       <h2 style={styles.title}>Buscar vehículo</h2>
@@ -20,11 +29,17 @@ export default function ReceptionSearch({
 
       <div style={styles.row}>
         <input
+          ref={inputRef}
           style={styles.input}
           type="text"
           placeholder="Ingresa o escanea VIN"
           value={searchValue}
           onChange={(e) => onSearchValueChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              onSearch();
+            }
+          }}
         />
 
         <button style={styles.secondaryButton} onClick={onOpenScanner}>
