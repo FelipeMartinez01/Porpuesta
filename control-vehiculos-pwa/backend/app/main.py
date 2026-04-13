@@ -6,6 +6,7 @@ from app.routers.carrier import router as carrier_router
 from app.routers.sector import router as sector_router
 from app.routers.vehicle import router as vehicle_router
 from app.routers.upload import router as upload_router
+from app.routers.parking import router as parking_router
 
 app = FastAPI(title="Control Vehiculos API")
 
@@ -32,3 +33,4 @@ app.include_router(carrier_router)
 app.include_router(sector_router)
 app.include_router(vehicle_router)
 app.include_router(upload_router)
+app.include_router(parking_router)

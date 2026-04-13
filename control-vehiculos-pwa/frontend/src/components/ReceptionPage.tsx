@@ -31,6 +31,14 @@ export default function ReceptionPage() {
   });
   const [loading, setLoading] = useState(false);
 
+  const focusSearchInput = () => {
+    setTimeout(() => {
+      const input = document.querySelector('input[placeholder="Ingresa o escanea VIN"]') as HTMLInputElement | null;
+      input?.focus();
+      input?.select();
+    }, 0);
+  };
+
   const searchVehicle = async (vinValue: string) => {
     if (!vinValue.trim()) {
       alert("Ingresa un VIN");
@@ -63,16 +71,14 @@ export default function ReceptionPage() {
 
   const handleSearch = async () => {
     await searchVehicle(searchValue);
-    setTimeout(() => {
-      const input = document.querySelector("input");
-      (input as HTMLInputElement)?.focus();
-    },0);
+    focusSearchInput();
   };
 
   const handleDetected = async (decodedText: string) => {
     setScannerOpen(false);
     setSearchValue(decodedText);
     await searchVehicle(decodedText);
+    focusSearchInput();
   };
 
   const handleChange = (field: keyof ReceptionFormData, value: string) => {
@@ -106,6 +112,7 @@ export default function ReceptionPage() {
       setSearchValue(updated.data.vin);
 
       alert("Vehículo actualizado correctamente");
+      focusSearchInput();
     } catch (error) {
       console.error("Error guardando vehículo", error);
       alert("No se pudo guardar el vehículo");
@@ -142,6 +149,7 @@ export default function ReceptionPage() {
       setSearchValue(updated.data.vin);
 
       alert("Vehículo marcado como EN_TRANSITO");
+      focusSearchInput();
     } catch (error) {
       console.error("Error marcando en tránsito", error);
       alert("No se pudo actualizar el estado");
