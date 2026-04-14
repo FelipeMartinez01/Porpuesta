@@ -89,9 +89,9 @@ def list_vehicles(
     sector_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    query = (
-        db.query(Vehicle)
-        .options(joinedload(Vehicle.carrier), joinedload(Vehicle.sector))
+    query = db.query(Vehicle).options(
+        joinedload(Vehicle.carrier),
+        joinedload(Vehicle.sector)
     )
 
     if vin:
@@ -105,10 +105,11 @@ def list_vehicles(
 
     if sector_id is not None:
         query = query.filter(Vehicle.sector_id == sector_id)
-
+    
     vehicles = query.order_by(Vehicle.id.asc()).all()
-
+    
     return [build_vehicle_response(vehicle) for vehicle in vehicles]
+
 
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)
@@ -131,17 +132,18 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
-
+    
     update_data = payload.model_dump(exclude_unset=True)
-
-    update_data = payload.model_dump(exclude_unset=True)
-
+    
     if "vin" in update_data:
-        existing = db.query(Vehicle).filter(Vehicle.vin == update_data["vin"], Vehicle.id != vehicle_id).first()
+        existing = db.query(Vehicle).filter(
+            Vehicle.vin == update_data["vin"],
+            Vehicle.id != vehicle_id
+        ).first()
         if existing:
-         raise HTTPException(status_code=400, detail="Ya existe otro vehículo con ese VIN")
+            raise HTTPException(status_code=400, detail="Ya existe otro vehículo con ese VIN")
         update_data["barcode_id"] = update_data["vin"]
-        
+
     validate_relations(
         db,
         update_data.get("carrier_id", vehicle.carrier_id),
@@ -208,6 +210,11 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
     )
     if occupied:
         raise HTTPException(status_code=400, detail="Ese slot ya está ocupado por otro vehículo")
+
+    if vehicle.slot_id:
+        old_slot = db.query(ParkingSlot).filter(ParkingSlot.id == vehicle.slot_id).first()
+        if old_slot:
+            old_slot.visual_status = "DISPONIBLE"
 
     vehicle.slot_id = payload.slot_id
     vehicle.status = "RECEPCIONADO"
