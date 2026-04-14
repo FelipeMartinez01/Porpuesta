@@ -6,3 +6,13 @@ export type ParkingSlot = {
   code: string;
   visual_status: "DISPONIBLE" | "SALIDA" | "OCUPADO";
 };
+
+export type SlotVehicleInfo = {
+  id: number;
+  vin: string;
+  status: string;
+  carrier_name?: string | null;
+  sector_name?: string | null;
+  brand?: string | null;
+  model?: string | null;
+};

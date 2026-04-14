@@ -1,38 +1,73 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import ParkingGrid from "../components/ParkingGrid";
-import type { ParkingSlot } from "../types/parking";
+import type { ParkingSlot, SlotVehicleInfo } from "../types/parking";
 import type { Vehicle } from "../types/vehicle";
+import type { Sector } from "../types/catalogs";
 
 export default function ParkingMapPage() {
   const [slots, setSlots] = useState<ParkingSlot[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [selectedSectorId, setSelectedSectorId] = useState("1");
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
+  const [selectedSlotVehicle, setSelectedSlotVehicle] = useState<SlotVehicleInfo | null>(null);
+  const [slotVehicles, setSlotVehicles] = useState<Record<number, SlotVehicleInfo>>({});
   const [loading, setLoading] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (sectorId: string) => {
     try {
-      const [slotsResponse, vehiclesResponse] = await Promise.all([
+      const [slotsResponse, vehiclesResponse, sectorsResponse] = await Promise.all([
         api.get<ParkingSlot[]>("/parking-slots/", {
-          params: { sector_id: 1 },
+          params: { sector_id: Number(sectorId) },
         }),
         api.get<Vehicle[]>("/vehicles/", {
           params: { status: "EN_TRANSITO" },
         }),
+        api.get<Sector[]>("/sectors/"),
       ]);
 
       setSlots(slotsResponse.data);
       setVehicles(vehiclesResponse.data);
+      setSectors(sectorsResponse.data);
+
+      const occupiedSlots = slotsResponse.data.filter((slot) => slot.visual_status === "OCUPADO");
+
+      const slotVehicleEntries = await Promise.all(
+        occupiedSlots.map(async (slot) => {
+          try {
+            const response = await api.get<SlotVehicleInfo>(`/vehicles/by-slot/${slot.id}`);
+            return [slot.id, response.data] as const;
+          } catch {
+            return [slot.id, null] as const;
+          }
+        })
+      );
+
+      const slotVehicleMap: Record<number, SlotVehicleInfo> = {};
+      slotVehicleEntries.forEach(([slotId, vehicle]) => {
+        if (vehicle) {
+          slotVehicleMap[slotId] = vehicle;
+        }
+      });
+
+      setSlotVehicles(slotVehicleMap);
     } catch (error) {
       console.error("Error cargando mapa", error);
-      alert("No se pudieron cargar slots o vehículos en tránsito");
+      alert("No se pudieron cargar slots o vehículos");
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(selectedSectorId);
+
+    const interval = setInterval(() => {
+      fetchData(selectedSectorId);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [selectedSectorId]);
 
   const handleAssign = async () => {
     if (!selectedVehicleId) {
@@ -42,6 +77,11 @@ export default function ParkingMapPage() {
 
     if (!selectedSlot) {
       alert("Debes seleccionar un slot");
+      return;
+    }
+
+    if (selectedSlot.visual_status === "OCUPADO") {
+      alert("Ese slot ya está ocupado");
       return;
     }
 
@@ -56,12 +96,28 @@ export default function ParkingMapPage() {
 
       setSelectedVehicleId("");
       setSelectedSlot(null);
-      await fetchData();
+      setSelectedSlotVehicle(null);
+      await fetchData(selectedSectorId);
     } catch (error) {
       console.error("Error asignando slot", error);
       alert("No se pudo asignar la ubicación");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelectSlot = async (slot: ParkingSlot) => {
+    setSelectedSlot(slot);
+
+    if (slot.visual_status === "OCUPADO") {
+      try {
+        const response = await api.get<SlotVehicleInfo>(`/vehicles/by-slot/${slot.id}`);
+        setSelectedSlotVehicle(response.data);
+      } catch {
+        setSelectedSlotVehicle(null);
+      }
+    } else {
+      setSelectedSlotVehicle(null);
     }
   };
 
@@ -74,6 +130,25 @@ export default function ParkingMapPage() {
 
       <div style={styles.card}>
         <div style={styles.formRow}>
+          <div style={styles.field}>
+            <label style={styles.label}>Sector</label>
+            <select
+              style={styles.input}
+              value={selectedSectorId}
+              onChange={(e) => {
+                setSelectedSectorId(e.target.value);
+                setSelectedSlot(null);
+                setSelectedSlotVehicle(null);
+              }}
+            >
+              {sectors.map((sector) => (
+                <option key={sector.id} value={sector.id}>
+                  {sector.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div style={styles.field}>
             <label style={styles.label}>Vehículo en tránsito</label>
             <select
@@ -108,11 +183,29 @@ export default function ParkingMapPage() {
         </div>
       </div>
 
+      {selectedSlot && selectedSlot.visual_status === "OCUPADO" ? (
+        <div style={styles.card}>
+          <h3 style={styles.sectionTitle}>Detalle del slot ocupado</h3>
+          <p><strong>Slot:</strong> {selectedSlot.code}</p>
+          {selectedSlotVehicle ? (
+            <>
+              <p><strong>VIN:</strong> {selectedSlotVehicle.vin}</p>
+              <p><strong>Estado:</strong> {selectedSlotVehicle.status}</p>
+              <p><strong>Porteador:</strong> {selectedSlotVehicle.carrier_name ?? "-"}</p>
+              <p><strong>Marca / Modelo:</strong> {selectedSlotVehicle.brand ?? "-"} {selectedSlotVehicle.model ?? ""}</p>
+            </>
+          ) : (
+            <p>No se pudo cargar el detalle del vehículo.</p>
+          )}
+        </div>
+      ) : null}
+
       <div style={styles.card}>
         <ParkingGrid
           slots={slots}
           selectedSlotId={selectedSlot?.id ?? null}
-          onSelectSlot={setSelectedSlot}
+          slotVehicles={slotVehicles}
+          onSelectSlot={handleSelectSlot}
         />
       </div>
     </div>
@@ -140,6 +233,10 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #e5e7eb",
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     marginBottom: "20px",
+  },
+  sectionTitle: {
+    marginTop: 0,
+    marginBottom: "12px",
   },
   formRow: {
     display: "grid",

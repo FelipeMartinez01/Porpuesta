@@ -1,8 +1,9 @@
-import type { ParkingSlot } from "../types/parking";
+import type { ParkingSlot, SlotVehicleInfo } from "../types/parking";
 
 type Props = {
   slots: ParkingSlot[];
   selectedSlotId: number | null;
+  slotVehicles: Record<number, SlotVehicleInfo>;
   onSelectSlot: (slot: ParkingSlot) => void;
 };
 
@@ -30,18 +31,24 @@ function getSlotStyle(slot: ParkingSlot, selected: boolean): React.CSSProperties
     color,
     border,
     borderRadius: "14px",
-    padding: "18px 10px",
+    padding: "14px 10px",
     textAlign: "center",
     fontWeight: 700,
-    cursor: slot.visual_status === "OCUPADO" ? "not-allowed" : "pointer",
-    opacity: slot.visual_status === "OCUPADO" ? 0.65 : 1,
+    cursor: "pointer",
+    opacity: 1,
     userSelect: "none",
+    minHeight: "110px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    gap: "6px",
   };
 }
 
 export default function ParkingGrid({
   slots,
   selectedSlotId,
+  slotVehicles,
   onSelectSlot,
 }: Props) {
   return (
@@ -59,20 +66,29 @@ export default function ParkingGrid({
       </div>
 
       <div style={styles.grid}>
-        {slots.map((slot) => (
-          <div
-            key={slot.id}
-            style={getSlotStyle(slot, selectedSlotId === slot.id)}
-            onClick={() => {
-              if (slot.visual_status !== "OCUPADO") {
-                onSelectSlot(slot);
-              }
-            }}
-          >
-            <div>{slot.code}</div>
-            <div style={styles.subtext}>{slot.visual_status}</div>
-          </div>
-        ))}
+        {slots.map((slot) => {
+          const slotVehicle = slotVehicles[slot.id];
+
+          return (
+            <div
+              key={slot.id}
+              style={getSlotStyle(slot, selectedSlotId === slot.id)}
+              onClick={() => onSelectSlot(slot)}
+            >
+              <div>{slot.code}</div>
+              <div style={styles.subtext}>{slot.visual_status}</div>
+
+              {slotVehicle ? (
+                <div style={styles.vehicleInfo}>
+                  <div style={styles.vin}>{slotVehicle.vin}</div>
+                  <div style={styles.modelText}>
+                    {slotVehicle.brand ?? "-"} {slotVehicle.model ?? ""}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -100,12 +116,24 @@ const styles: Record<string, React.CSSProperties> = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
     gap: "12px",
   },
   subtext: {
-    marginTop: "6px",
     fontSize: "12px",
     fontWeight: 600,
+  },
+  vehicleInfo: {
+    marginTop: "4px",
+    fontSize: "11px",
+    lineHeight: 1.2,
+  },
+  vin: {
+    fontWeight: 800,
+    wordBreak: "break-word",
+  },
+  modelText: {
+    opacity: 0.9,
+    marginTop: "2px",
   },
 };

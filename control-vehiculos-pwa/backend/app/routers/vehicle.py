@@ -242,3 +242,17 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
     db.delete(vehicle)
     db.commit()
     return None
+
+@router.get("/by-slot/{slot_id}", response_model=VehicleResponse)
+def get_vehicle_by_slot(slot_id: int, db: Session = Depends(get_db)):
+    vehicle = (
+        db.query(Vehicle)
+        .options(joinedload(Vehicle.carrier), joinedload(Vehicle.sector))
+        .filter(Vehicle.slot_id == slot_id)
+        .first()
+    )
+
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="No hay vehículo en este slot")
+
+    return build_vehicle_response(vehicle)
