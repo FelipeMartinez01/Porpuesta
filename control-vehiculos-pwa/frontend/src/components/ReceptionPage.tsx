@@ -6,6 +6,7 @@ import VinScanner from "../components/VinScanner";
 import VehiclePhotoUpload from "../components/VehiclePhotoUpload";
 import type { Vehicle } from "../types/vehicle";
 import type { ReceptionFormData } from "../types/reception";
+import { getImageUrl } from "../utils/url";
 
 function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
   return {
@@ -34,7 +35,10 @@ export default function ReceptionPage() {
 
   const focusSearchInput = () => {
     setTimeout(() => {
-      const input = document.querySelector('input[placeholder="Ingresa o escanea VIN"]') as HTMLInputElement | null;
+      const input = document.querySelector(
+        'input[placeholder="Ingresa o escanea VIN"]'
+      ) as HTMLInputElement | null;
+
       input?.focus();
       input?.select();
     }, 0);
@@ -62,6 +66,7 @@ export default function ReceptionPage() {
       const foundVehicle = response.data[0];
       setVehicle(foundVehicle);
       setFormData(mapVehicleToForm(foundVehicle));
+      setSearchValue(foundVehicle.vin);
     } catch (error) {
       console.error("Error buscando vehículo", error);
       alert("No se pudo buscar el vehículo");
@@ -159,6 +164,22 @@ export default function ReceptionPage() {
     }
   };
 
+  const handleOpenScanner = () => {
+    const isSecure =
+      window.isSecureContext ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+
+    if (!isSecure) {
+      alert(
+        "La cámara en vivo requiere una conexión segura (HTTPS). Por ahora usa ingreso manual del VIN."
+      );
+      return;
+    }
+
+    setScannerOpen(true);
+  };
+
   return (
     <div style={styles.page}>
       <h1 style={styles.title}>Recepción</h1>
@@ -170,18 +191,33 @@ export default function ReceptionPage() {
         searchValue={searchValue}
         onSearchValueChange={setSearchValue}
         onSearch={handleSearch}
-        onOpenScanner={() => setScannerOpen(true)}
+        onOpenScanner={handleOpenScanner}
       />
 
       {scannerOpen ? (
         <VinScanner
           onDetected={handleDetected}
-          onClose={() => setScannerOpen(false)}
+          onClose={() => {
+            setScannerOpen(false);
+            focusSearchInput();
+          }}
         />
       ) : null}
 
       {vehicle ? (
         <div style={styles.infoCard}>
+          {vehicle.photo_url ? (
+            <div style={styles.photoBox}>
+              <img
+                src={getImageUrl(vehicle.photo_url)}
+                alt={`Vehículo ${vehicle.vin}`}
+                style={styles.photo}
+              />
+            </div>
+          ) : (
+            <div style={styles.noPhoto}>Sin foto</div>
+          )}
+
           <p><strong>ID interno:</strong> {vehicle.id}</p>
           <p><strong>Estado actual:</strong> {vehicle.status}</p>
           <p><strong>Porteador:</strong> {vehicle.carrier_name ?? "-"}</p>
@@ -202,44 +238,25 @@ export default function ReceptionPage() {
 
       {vehicle ? (
         <div style={styles.infoCard}>
-          <h3>Foto del vehículo</h3>
+          <h3 style={styles.sectionTitle}>Foto del vehículo</h3>
           <VehiclePhotoUpload
             vehicleId={vehicle.id}
             onUploaded={async () => {
               const updated = await api.get<Vehicle>(`/vehicles/${vehicle.id}`);
               setVehicle(updated.data);
               setFormData(mapVehicleToForm(updated.data));
+              setSearchValue(updated.data.vin);
               alert("Foto actualizada");
+              focusSearchInput();
             }}
           />
         </div>
       ) : null}
-
-
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  photoBox: {
-  marginBottom: "16px",
-  },
-  photo: {
-  width: "100%",
-  borderRadius: "12px",
-  border: "1px solid #e5e7eb",
-  objectFit: "cover",
-  maxHeight: "260px",
-  },
-  noPhoto: {
-  marginBottom: "16px",
-  padding: "16px",
-  borderRadius: "12px",
-  background: "#f9fafb",
-  border: "1px dashed #d1d5db",
-  color: "#6b7280",
-  textAlign: "center",
-  },
   page: {
     padding: "24px",
   },
@@ -260,5 +277,28 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #e5e7eb",
     boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
     marginBottom: "20px",
+  },
+  sectionTitle: {
+    marginTop: 0,
+    marginBottom: "12px",
+  },
+  photoBox: {
+    marginBottom: "16px",
+  },
+  photo: {
+    width: "100%",
+    borderRadius: "12px",
+    border: "1px solid #e5e7eb",
+    objectFit: "cover",
+    maxHeight: "260px",
+  },
+  noPhoto: {
+    marginBottom: "16px",
+    padding: "16px",
+    borderRadius: "12px",
+    background: "#f9fafb",
+    border: "1px dashed #d1d5db",
+    color: "#6b7280",
+    textAlign: "center",
   },
 };

@@ -11,7 +11,7 @@ export default function VinScanner({ onDetected, onClose }: Props) {
   const regionId = "vin-scanner-region";
 
   useEffect(() => {
-    let isMounted = true;
+    let active = true;
 
     const startScanner = async () => {
       try {
@@ -26,23 +26,33 @@ export default function VinScanner({ onDetected, onClose }: Props) {
             aspectRatio: 1.7778,
           },
           async (decodedText) => {
-            if (!isMounted) return;
+            if (!active) return;
 
             try {
-              await scanner.stop();
+              if (scanner.isScanning) {
+                await scanner.stop();
+              }
             } catch {
-              // ignorar si ya se detuvo
+              // ignorar error al detener
+            }
+
+            try {
+              await scanner.clear();
+            } catch {
+              // ignorar error al limpiar
             }
 
             onDetected(decodedText);
           },
           () => {
-            // errores de frame ignorados
+            // ignorar errores de lectura por frame
           }
         );
       } catch (error) {
         console.error("No se pudo iniciar la cámara", error);
-        alert("No se pudo abrir la cámara en este dispositivo o navegador.");
+        alert(
+          "No se pudo abrir la cámara. En celular, la cámara en vivo normalmente requiere HTTPS. Usa ingreso manual o una URL segura."
+        );
         onClose();
       }
     };
@@ -50,20 +60,25 @@ export default function VinScanner({ onDetected, onClose }: Props) {
     startScanner();
 
     return () => {
-      isMounted = false;
+      active = false;
 
-      const stopScanner = async () => {
+      const cleanup = async () => {
         try {
           if (scannerRef.current?.isScanning) {
             await scannerRef.current.stop();
           }
+        } catch {
+          // ignorar
+        }
+
+        try {
           await scannerRef.current?.clear();
         } catch {
-          // ignorar errores al desmontar
+          // ignorar
         }
       };
 
-      stopScanner();
+      cleanup();
     };
   }, [onDetected, onClose]);
 
@@ -78,7 +93,7 @@ export default function VinScanner({ onDetected, onClose }: Props) {
         </div>
 
         <p style={styles.text}>
-          Apunta la cámara al código de barra del vehículo.
+          Apunta la cámara al código de barras del vehículo.
         </p>
 
         <div id={regionId} style={styles.scannerRegion} />
@@ -91,7 +106,7 @@ const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.55)",
+    background: "rgba(0, 0, 0, 0.55)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",

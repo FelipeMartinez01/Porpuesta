@@ -1,4 +1,5 @@
 import type { Vehicle } from "../types/vehicle";
+import { getImageUrl } from "../utils/url";
 
 type Props = {
   vehicle: Vehicle | null;
@@ -62,10 +63,11 @@ export default function VehicleDetailCard({ vehicle }: Props) {
   return (
     <div style={styles.card}>
       <h3 style={styles.title}>Detalle del vehículo</h3>
+
       {vehicle.photo_url ? (
         <div style={styles.photoBox}>
           <img
-            src={`http://127.0.0.1:8000/${vehicle.photo_url}`}
+            src={getImageUrl(vehicle.photo_url)}
             alt={`Vehículo ${vehicle.vin}`}
             style={styles.photo}
           />
@@ -73,6 +75,7 @@ export default function VehicleDetailCard({ vehicle }: Props) {
       ) : (
         <div style={styles.noPhoto}>Sin foto principal</div>
       )}
+
       <DetailRow label="ID" value={vehicle.id} />
       <DetailRow label="VIN" value={vehicle.vin} />
       <DetailRow label="Código de barras" value={vehicle.barcode_id ?? "-"} />
@@ -105,6 +108,25 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     marginTop: 0,
     marginBottom: "16px",
+  },
+  photoBox: {
+    marginBottom: "16px",
+  },
+  photo: {
+    width: "100%",
+    borderRadius: "12px",
+    border: "1px solid #e5e7eb",
+    objectFit: "cover",
+    maxHeight: "260px",
+  },
+  noPhoto: {
+    marginBottom: "16px",
+    padding: "16px",
+    borderRadius: "12px",
+    background: "#f9fafb",
+    border: "1px dashed #d1d5db",
+    color: "#6b7280",
+    textAlign: "center",
   },
   emptyText: {
     color: "#666",

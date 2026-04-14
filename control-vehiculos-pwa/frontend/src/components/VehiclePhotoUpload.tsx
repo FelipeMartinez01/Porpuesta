@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../api/client";
 
 type Props = {
@@ -10,9 +10,14 @@ export default function VehiclePhotoUpload({ vehicleId, onUploaded }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const previewUrl = useMemo(() => {
+    if (!file) return null;
+    return URL.createObjectURL(file);
+  }, [file]);
+
   const handleUpload = async () => {
     if (!file) {
-      alert("Selecciona una imagen");
+      alert("Selecciona o toma una imagen");
       return;
     }
 
@@ -41,14 +46,28 @@ export default function VehiclePhotoUpload({ vehicleId, onUploaded }: Props) {
 
   return (
     <div style={styles.wrapper}>
+      <label style={styles.label}>Tomar o seleccionar foto</label>
+
       <input
         type="file"
-        accept=".jpg,.jpeg,.png,.webp"
+        accept="image/*"
+        capture="environment"
         onChange={(e) => {
           const selected = e.target.files?.[0] ?? null;
           setFile(selected);
         }}
       />
+
+      {file && previewUrl ? (
+        <div style={styles.previewBox}>
+          <p style={styles.fileName}>Archivo: {file.name}</p>
+          <img
+            src={previewUrl}
+            alt="Vista previa"
+            style={styles.preview}
+          />
+        </div>
+      ) : null}
 
       <button style={styles.button} onClick={handleUpload} disabled={loading}>
         {loading ? "Subiendo..." : "Subir foto"}
@@ -63,6 +82,28 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: "10px",
     marginTop: "12px",
+  },
+  label: {
+    fontSize: "13px",
+    fontWeight: 700,
+  },
+  previewBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    marginTop: "8px",
+  },
+  fileName: {
+    margin: 0,
+    fontSize: "13px",
+    color: "#4b5563",
+  },
+  preview: {
+    width: "100%",
+    maxWidth: "320px",
+    borderRadius: "12px",
+    border: "1px solid #e5e7eb",
+    objectFit: "cover",
   },
   button: {
     padding: "10px 14px",

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import ReceptionSearch from "../components/ReceptionSearch";
 import ReceptionForm from "../components/ReceptionForm";
+import VinScanner from "../components/VinScanner";
 import type { Vehicle } from "../types/vehicle";
 import type { ReceptionFormData } from "../types/reception";
 
@@ -19,6 +20,7 @@ function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
 export default function ReceptionPage() {
   const [searchValue, setSearchValue] = useState("");
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [formData, setFormData] = useState<ReceptionFormData>({
     vin: "",
     color: "",
@@ -29,8 +31,19 @@ export default function ReceptionPage() {
   });
   const [loading, setLoading] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchValue.trim()) {
+  const focusSearchInput = () => {
+    setTimeout(() => {
+      const input = document.querySelector(
+        'input[placeholder="Ingresa o escanea VIN"]'
+      ) as HTMLInputElement | null;
+
+      input?.focus();
+      input?.select();
+    }, 0);
+  };
+
+  const searchVehicle = async (vinValue: string) => {
+    if (!vinValue.trim()) {
       alert("Ingresa un VIN");
       return;
     }
@@ -39,7 +52,7 @@ export default function ReceptionPage() {
       setLoading(true);
 
       const response = await api.get<Vehicle[]>("/vehicles/", {
-        params: { vin: searchValue.trim() },
+        params: { vin: vinValue.trim() },
       });
 
       if (response.data.length === 0) {
@@ -51,12 +64,41 @@ export default function ReceptionPage() {
       const foundVehicle = response.data[0];
       setVehicle(foundVehicle);
       setFormData(mapVehicleToForm(foundVehicle));
+      setSearchValue(foundVehicle.vin);
     } catch (error) {
       console.error("Error buscando vehículo", error);
       alert("No se pudo buscar el vehículo");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = async () => {
+    await searchVehicle(searchValue);
+    focusSearchInput();
+  };
+
+  const handleDetected = async (decodedText: string) => {
+    setScannerOpen(false);
+    setSearchValue(decodedText);
+    await searchVehicle(decodedText);
+    focusSearchInput();
+  };
+
+  const handleOpenScanner = () => {
+    const isSecure =
+      window.isSecureContext ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+
+    if (!isSecure) {
+      alert(
+        "La cámara en vivo requiere una conexión segura (HTTPS). Por ahora usa ingreso manual del VIN."
+      );
+      return;
+    }
+
+    setScannerOpen(true);
   };
 
   const handleChange = (field: keyof ReceptionFormData, value: string) => {
@@ -87,8 +129,10 @@ export default function ReceptionPage() {
       const updated = await api.get<Vehicle>(`/vehicles/${vehicle.id}`);
       setVehicle(updated.data);
       setFormData(mapVehicleToForm(updated.data));
+      setSearchValue(updated.data.vin);
 
       alert("Vehículo actualizado correctamente");
+      focusSearchInput();
     } catch (error) {
       console.error("Error guardando vehículo", error);
       alert("No se pudo guardar el vehículo");
@@ -122,8 +166,10 @@ export default function ReceptionPage() {
       const updated = await api.get<Vehicle>(`/vehicles/${vehicle.id}`);
       setVehicle(updated.data);
       setFormData(mapVehicleToForm(updated.data));
+      setSearchValue(updated.data.vin);
 
       alert("Vehículo marcado como EN_TRANSITO");
+      focusSearchInput();
     } catch (error) {
       console.error("Error marcando en tránsito", error);
       alert("No se pudo actualizar el estado");
@@ -143,7 +189,18 @@ export default function ReceptionPage() {
         searchValue={searchValue}
         onSearchValueChange={setSearchValue}
         onSearch={handleSearch}
+        onOpenScanner={handleOpenScanner}
       />
+
+      {scannerOpen ? (
+        <VinScanner
+          onDetected={handleDetected}
+          onClose={() => {
+            setScannerOpen(false);
+            focusSearchInput();
+          }}
+        />
+      ) : null}
 
       {vehicle ? (
         <div style={styles.infoCard}>

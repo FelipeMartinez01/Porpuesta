@@ -1,10 +1,10 @@
-import { useRef, useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 type Props = {
   searchValue: string;
   onSearchValueChange: (value: string) => void;
   onSearch: () => void;
-  onOpenScanner: () => void;
+  onOpenScanner?: () => void;
 };
 
 export default function ReceptionSearch({
@@ -13,7 +13,6 @@ export default function ReceptionSearch({
   onSearch,
   onOpenScanner,
 }: Props) {
-
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -24,10 +23,15 @@ export default function ReceptionSearch({
     <div style={styles.card}>
       <h2 style={styles.title}>Buscar vehículo</h2>
       <p style={styles.text}>
-        Ingresa el VIN manualmente o usa la cámara para escanearlo.
+        Ingresa el VIN manualmente{onOpenScanner ? " o usa la cámara para escanearlo" : ""}.
       </p>
 
-      <div style={styles.row}>
+      <div
+        style={{
+          ...styles.row,
+          gridTemplateColumns: onOpenScanner ? "1fr auto auto" : "1fr auto",
+        }}
+      >
         <input
           ref={inputRef}
           style={styles.input}
@@ -42,9 +46,11 @@ export default function ReceptionSearch({
           }}
         />
 
-        <button style={styles.secondaryButton} onClick={onOpenScanner}>
-          Abrir cámara
-        </button>
+        {onOpenScanner ? (
+          <button style={styles.secondaryButton} onClick={onOpenScanner}>
+            Abrir cámara
+          </button>
+        ) : null}
 
         <button style={styles.button} onClick={onSearch}>
           Buscar
@@ -74,7 +80,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   row: {
     display: "grid",
-    gridTemplateColumns: "1fr auto auto",
     gap: "12px",
   },
   input: {
