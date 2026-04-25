@@ -3,6 +3,8 @@ from datetime import datetime
 from sqlalchemy import String, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
+from app.services.vehicle_event_service import create_vehicle_event
+
 
 
 class Vehicle(Base):
@@ -31,3 +33,10 @@ class Vehicle(Base):
     sector: Mapped["Sector | None"] = relationship(back_populates="vehicles")
     slot: Mapped["ParkingSlot | None"] = relationship(back_populates="vehicle")
     photos: Mapped[list["VehiclePhoto"]] = relationship(back_populates="vehicle", cascade="all, delete-orphan")
+
+    # relación con historial de eventos
+    events: Mapped[list["VehicleEvent"]] = relationship(
+        "VehicleEvent",
+        back_populates="vehicle",
+        cascade="all, delete-orphan"
+    )

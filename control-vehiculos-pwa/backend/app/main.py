@@ -2,13 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.database import Base, engine
-from app.models import Carrier, Sector, ParkingSlot, Vehicle, VehiclePhoto
+from app.models import Carrier, Sector, ParkingSlot, Vehicle, VehiclePhoto, VehicleEvent
 from app.routers.carrier import router as carrier_router
 from app.routers.sector import router as sector_router
 from app.routers.vehicle import router as vehicle_router
 from app.routers.upload import router as upload_router
 from app.routers.parking import router as parking_router
 from app.routers.vehicle_photo import router as vehicle_photo_router
+
 
 app = FastAPI(title="Control Vehiculos API")
 

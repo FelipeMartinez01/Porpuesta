@@ -4,6 +4,8 @@ from app.core.database import get_db
 from app.models.vehicle import Vehicle
 from app.models.vehicle_photo import VehiclePhoto
 from app.services.file_service import save_vehicle_photo
+from app.services.vehicle_event_service import create_vehicle_event
+
 
 router = APIRouter(prefix="/vehicle-photos", tags=["Vehicle Photos"])
 
@@ -30,6 +32,13 @@ def upload_vehicle_photo(
     db.add(photo)
 
     vehicle.photo_url = saved_path
+
+    create_vehicle_event(
+        db=db,
+        vehicle_id=vehicle_id,
+        event_type="PHOTO_UPLOADED",
+        description="Se subió una foto del vehículo",
+    )
 
     db.commit()
     db.refresh(photo)

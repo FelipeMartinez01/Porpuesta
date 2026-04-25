@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import VehicleFilters from "../components/VehicleFilters";
 import VehicleTable from "../components/VehicleTable";
 import VehicleDetailCard from "../components/VehicleDetailCard";
+import VehicleCreateForm from "../components/VehicleCreateForm";
 import type { Vehicle } from "../types/vehicle";
 import type { Carrier, Sector } from "../types/catalogs";
 
@@ -12,6 +13,7 @@ export default function VehiclesPage() {
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false); // 🔥 NUEVO
 
   const [vin, setVin] = useState("");
   const [status, setStatus] = useState("");
@@ -107,7 +109,25 @@ export default function VehiclesPage() {
             Consulta, filtra y actualiza el estado de los vehículos recepcionados.
           </p>
         </div>
+
+        {/* 🔥 BOTÓN NUEVO */}
+        <button style={styles.createButton} onClick={() => setCreateOpen(true)}>
+          + Agregar vehículo
+        </button>
       </div>
+
+      {/* 🔥 FORMULARIO MANUAL */}
+      {createOpen ? (
+        <VehicleCreateForm
+          carriers={carriers}
+          sectors={sectors}
+          onCreated={async () => {
+            setCreateOpen(false);
+            await fetchVehicles();
+          }}
+          onCancel={() => setCreateOpen(false)}
+        />
+      ) : null}
 
       <VehicleFilters
         vin={vin}
@@ -151,6 +171,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   header: {
     marginBottom: "20px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "12px",
   },
   title: {
     margin: 0,
@@ -161,14 +186,26 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     color: "#6b7280",
   },
+  createButton: {
+    background: "#111827",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    padding: "12px 16px",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   loading: {
     marginBottom: "16px",
   },
   layout: {
-  display: "grid",
-  gridTemplateColumns: window.innerWidth < 980 ? "1fr" : "minmax(0, 2fr) minmax(300px, 1fr)",
-  gap: "20px",
-  alignItems: "start",
+    display: "grid",
+    gridTemplateColumns:
+      window.innerWidth < 980
+        ? "1fr"
+        : "minmax(0, 2fr) minmax(300px, 1fr)",
+    gap: "20px",
+    alignItems: "start",
   },
   tableArea: {
     minWidth: 0,

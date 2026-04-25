@@ -5,6 +5,7 @@ from app.models.vehicle import Vehicle
 from app.models.carrier import Carrier
 from app.models.sector import Sector
 from app.models.parking_slot import ParkingSlot
+from app.models.vehicle_event import VehicleEvent
 from app.schemas.vehicle import (
     VehicleCreate,
     VehicleUpdate,
@@ -12,6 +13,8 @@ from app.schemas.vehicle import (
     VehicleStatusUpdate,
     VehicleAssignSlot,
 )
+from app.schemas.vehicle_event import VehicleEventResponse
+from app.services.vehicle_event_service import create_vehicle_event
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
@@ -68,6 +71,15 @@ def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)):
 
     vehicle = Vehicle(**vehicle_data)
     db.add(vehicle)
+    db.flush()
+
+    create_vehicle_event(
+        db=db,
+        vehicle_id=vehicle.id,
+        event_type="CREATED",
+        description=f"Vehículo creado con VIN {vehicle.vin}",
+    )
+
     db.commit()
     db.refresh(vehicle)
 
@@ -105,11 +117,10 @@ def list_vehicles(
 
     if sector_id is not None:
         query = query.filter(Vehicle.sector_id == sector_id)
-    
-    vehicles = query.order_by(Vehicle.id.asc()).all()
-    
-    return [build_vehicle_response(vehicle) for vehicle in vehicles]
 
+    vehicles = query.order_by(Vehicle.id.asc()).all()
+
+    return [build_vehicle_response(vehicle) for vehicle in vehicles]
 
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)
@@ -132,9 +143,9 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
-    
+
     update_data = payload.model_dump(exclude_unset=True)
-    
+
     if "vin" in update_data:
         existing = db.query(Vehicle).filter(
             Vehicle.vin == update_data["vin"],
@@ -153,6 +164,13 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
 
     for key, value in update_data.items():
         setattr(vehicle, key, value)
+
+    create_vehicle_event(
+        db=db,
+        vehicle_id=vehicle.id,
+        event_type="RECEIVED",
+        description="Datos del vehículo actualizados",
+    )
 
     db.commit()
     db.refresh(vehicle)
@@ -179,6 +197,13 @@ def update_vehicle_status(vehicle_id: int, payload: VehicleStatusUpdate, db: Ses
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
 
     vehicle.status = payload.status
+
+    create_vehicle_event(
+        db=db,
+        vehicle_id=vehicle.id,
+        event_type="STATUS_CHANGED",
+        description=f"Estado cambiado a {payload.status}",
+    )
 
     db.commit()
     db.refresh(vehicle)
@@ -220,6 +245,13 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
     vehicle.status = "RECEPCIONADO"
     slot.visual_status = "OCUPADO"
 
+    create_vehicle_event(
+        db=db,
+        vehicle_id=vehicle.id,
+        event_type="SLOT_ASSIGNED",
+        description=f"Vehículo asignado al slot {slot.code}",
+    )
+
     db.commit()
     db.refresh(vehicle)
 
@@ -243,6 +275,7 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
     db.commit()
     return None
 
+
 @router.get("/by-slot/{slot_id}", response_model=VehicleResponse)
 def get_vehicle_by_slot(slot_id: int, db: Session = Depends(get_db)):
     vehicle = (
@@ -256,3 +289,19 @@ def get_vehicle_by_slot(slot_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No hay vehículo en este slot")
 
     return build_vehicle_response(vehicle)
+
+
+@router.get("/{vehicle_id}/events", response_model=list[VehicleEventResponse])
+def list_vehicle_events(vehicle_id: int, db: Session = Depends(get_db)):
+    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+
+    events = (
+        db.query(VehicleEvent)
+        .filter(VehicleEvent.vehicle_id == vehicle_id)
+        .order_by(VehicleEvent.created_at.desc())
+        .all()
+    )
+
+    return events

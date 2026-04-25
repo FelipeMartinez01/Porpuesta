@@ -3,8 +3,10 @@ import { api } from "../api/client";
 import ReceptionSearch from "../components/ReceptionSearch";
 import ReceptionForm from "../components/ReceptionForm";
 import VinScanner from "../components/VinScanner";
+import VehicleTimeline from "../components/VehicleTimeLine";
 import type { Vehicle } from "../types/vehicle";
 import type { ReceptionFormData } from "../types/reception";
+import type { VehicleEvent } from "../types/vehicleEvent";
 
 function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
   return {
@@ -20,6 +22,7 @@ function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
 export default function ReceptionPage() {
   const [searchValue, setSearchValue] = useState("");
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [events, setEvents] = useState<VehicleEvent[]>([]);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [formData, setFormData] = useState<ReceptionFormData>({
     vin: "",
@@ -30,6 +33,16 @@ export default function ReceptionPage() {
     notes: "",
   });
   const [loading, setLoading] = useState(false);
+
+  const fetchVehicleEvents = async (vehicleId: number) => {
+    try {
+      const response = await api.get<VehicleEvent[]>(`/vehicles/${vehicleId}/events`);
+      setEvents(response.data);
+    } catch (error) {
+      console.error("Error cargando historial", error);
+      setEvents([]);
+    }
+  };
 
   const focusSearchInput = () => {
     setTimeout(() => {
@@ -58,6 +71,7 @@ export default function ReceptionPage() {
       if (response.data.length === 0) {
         alert("No se encontró ningún vehículo");
         setVehicle(null);
+        setEvents([]);
         return;
       }
 
@@ -65,6 +79,7 @@ export default function ReceptionPage() {
       setVehicle(foundVehicle);
       setFormData(mapVehicleToForm(foundVehicle));
       setSearchValue(foundVehicle.vin);
+      await fetchVehicleEvents(foundVehicle.id);
     } catch (error) {
       console.error("Error buscando vehículo", error);
       alert("No se pudo buscar el vehículo");
@@ -130,6 +145,7 @@ export default function ReceptionPage() {
       setVehicle(updated.data);
       setFormData(mapVehicleToForm(updated.data));
       setSearchValue(updated.data.vin);
+      await fetchVehicleEvents(updated.data.id);
 
       alert("Vehículo actualizado correctamente");
       focusSearchInput();
@@ -167,6 +183,7 @@ export default function ReceptionPage() {
       setVehicle(updated.data);
       setFormData(mapVehicleToForm(updated.data));
       setSearchValue(updated.data.vin);
+      await fetchVehicleEvents(updated.data.id);
 
       alert("Vehículo marcado como EN_TRANSITO");
       focusSearchInput();
@@ -221,6 +238,8 @@ export default function ReceptionPage() {
           loading={loading}
         />
       ) : null}
+
+      {vehicle ? <VehicleTimeline events={events} /> : null}
     </div>
   );
 }
