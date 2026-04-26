@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import VinScanner from "../components/VinScanner";
 import type { Vehicle } from "../types/vehicle";
 
 export default function YardDispatchPage() {
-  const [searchValue, setSearchValue] = useState("");
+  const location = useLocation();
+  const initialSearchVin =
+    (location.state as { searchVin?: string } | null)?.searchVin ?? "";
+
+  const [searchValue, setSearchValue] = useState(initialSearchVin);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -40,7 +45,7 @@ export default function YardDispatchPage() {
   };
 
   useEffect(() => {
-    fetchStoredVehicles();
+    fetchStoredVehicles(initialSearchVin);
   }, []);
 
   useEffect(() => {
@@ -167,8 +172,8 @@ export default function YardDispatchPage() {
                     {vehicle.brand ?? "-"} {vehicle.model ?? ""}
                   </span>
                   <small>
-                    BL: {vehicle.shipment_bl ?? "-"} · Sector: {vehicle.sector_name ?? "-"} · Slot:{" "}
-                    {vehicle.slot_id ?? "-"}
+                    BL: {vehicle.shipment_bl ?? "-"} · Sector:{" "}
+                    {vehicle.sector_name ?? "-"} · Slot: {vehicle.slot_id ?? "-"}
                   </small>
                 </button>
               ))}

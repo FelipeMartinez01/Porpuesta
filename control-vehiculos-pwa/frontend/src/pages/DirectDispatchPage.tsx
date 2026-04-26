@@ -2,9 +2,14 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import VinScanner from "../components/VinScanner";
 import type { Vehicle } from "../types/vehicle";
+import { useLocation } from "react-router-dom";
 
 export default function DirectDispatchPage() {
-  const [searchValue, setSearchValue] = useState("");
+  const location = useLocation();
+  const initialSearchVin =
+    (location.state as { searchVin?: string } | null)?.searchVin ?? "";
+
+  const [searchValue, setSearchValue] = useState(initialSearchVin);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -40,7 +45,7 @@ export default function DirectDispatchPage() {
   };
 
   useEffect(() => {
-    fetchDirectVehicles();
+    fetchDirectVehicles(initialSearchVin);
   }, []);
 
   useEffect(() => {

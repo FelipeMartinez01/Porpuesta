@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { api } from "../api/client";
 
 type Props = {
   isMobile?: boolean;
@@ -12,16 +14,44 @@ const links = [
   { to: "/upload", label: "Carga masiva" },
   { to: "/reception", label: "Recepción" },
   { to: "/parking-map", label: "Mapa de posiciones" },
+  { to: "/dispatch-direct", label: "Despacho directo" },
+  { to: "/dispatch-yard", label: "Despacho patio" },
   { to: "/logistics", label: "Logística" },
   { to: "/carriers", label: "Porteadores" },
-  { to: "/dispatch-yard", label: "Despacho patio" },
+  { to: "/alerts", label: "Alertas" },
 ];
+
+type AlertsCounterResponse = {
+  total_alerts: number;
+};
 
 export default function Sidebar({
   isMobile = false,
   isOpen = false,
   onClose,
 }: Props) {
+  const [alertsCount, setAlertsCount] = useState(0);
+
+  const fetchAlertsCount = async () => {
+    try {
+      const response = await api.get<AlertsCounterResponse>("/alerts/");
+      setAlertsCount(response.data.total_alerts ?? 0);
+    } catch (error) {
+      console.error("Error cargando contador de alertas", error);
+      setAlertsCount(0);
+    }
+  };
+
+  useEffect(() => {
+    fetchAlertsCount();
+
+    const interval = setInterval(() => {
+      fetchAlertsCount();
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <aside
       style={{
@@ -50,19 +80,27 @@ export default function Sidebar({
       </div>
 
       <nav style={styles.nav}>
-        {links.map((link) => (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            onClick={isMobile ? onClose : undefined}
-            style={({ isActive }) => ({
-              ...styles.link,
-              ...(isActive ? styles.activeLink : {}),
-            })}
-          >
-            {link.label}
-          </NavLink>
-        ))}
+        {links.map((link) => {
+          const isAlertsLink = link.to === "/alerts";
+
+          return (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              onClick={isMobile ? onClose : undefined}
+              style={({ isActive }) => ({
+                ...styles.link,
+                ...(isActive ? styles.activeLink : {}),
+              })}
+            >
+              <span>{link.label}</span>
+
+              {isAlertsLink && alertsCount > 0 ? (
+                <span style={styles.badge}>{alertsCount}</span>
+              ) : null}
+            </NavLink>
+          );
+        })}
       </nav>
     </aside>
   );
@@ -120,9 +158,26 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
     color: "#e5e7eb",
     fontWeight: 600,
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "10px",
   },
   activeLink: {
     background: "#1f2937",
     color: "#fff",
+  },
+  badge: {
+    minWidth: "24px",
+    height: "24px",
+    padding: "0 7px",
+    borderRadius: "999px",
+    background: "#dc2626",
+    color: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "12px",
+    fontWeight: 900,
   },
 };

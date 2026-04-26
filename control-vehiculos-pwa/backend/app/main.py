@@ -14,6 +14,7 @@ from app.routers.vehicle_photo import router as vehicle_photo_router
 from app.routers.shipment import router as shipment_router
 from app.routers.vessel import router as vessel_router
 from app.routers.voyage import router as voyage_router
+from app.routers.alert import router as alert_router
 
 app = FastAPI(title="Control Vehiculos API")
 
@@ -47,3 +48,4 @@ app.include_router(vehicle_photo_router)
 app.include_router(shipment_router)
 app.include_router(vessel_router)
 app.include_router(voyage_router)
+app.include_router(alert_router)

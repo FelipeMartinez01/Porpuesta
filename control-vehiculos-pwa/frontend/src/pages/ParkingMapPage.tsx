@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import ParkingGrid from "../components/ParkingGrid";
 import type { ParkingSlot, SlotVehicleInfo } from "../types/parking";
@@ -8,17 +9,22 @@ import type { Sector } from "../types/catalogs";
 type SlotFilter = "TODOS" | "DISPONIBLE" | "OCUPADO" | "SALIDA";
 
 export default function ParkingMapPage() {
+  const location = useLocation();
+  const initialSearchVin =
+    (location.state as { searchVin?: string } | null)?.searchVin ?? "";
+
   const [slots, setSlots] = useState<ParkingSlot[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selectedSectorId, setSelectedSectorId] = useState("1");
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
-  const [selectedSlotVehicle, setSelectedSlotVehicle] = useState<SlotVehicleInfo | null>(null);
+  const [selectedSlotVehicle, setSelectedSlotVehicle] =
+    useState<SlotVehicleInfo | null>(null);
   const [slotVehicles, setSlotVehicles] = useState<Record<number, SlotVehicleInfo>>({});
   const [loading, setLoading] = useState(false);
 
-  const [mapSearch, setMapSearch] = useState("");
+  const [mapSearch, setMapSearch] = useState(initialSearchVin);
   const [slotFilter, setSlotFilter] = useState<SlotFilter>("TODOS");
   const [highlightedSlotId, setHighlightedSlotId] = useState<number | null>(null);
 
@@ -45,7 +51,9 @@ export default function ParkingMapPage() {
       const slotVehicleEntries = await Promise.all(
         occupiedSlots.map(async (slot) => {
           try {
-            const response = await api.get<SlotVehicleInfo>(`/vehicles/by-slot/${slot.id}`);
+            const response = await api.get<SlotVehicleInfo>(
+              `/vehicles/by-slot/${slot.id}`
+            );
             return [slot.id, response.data] as const;
           } catch {
             return [slot.id, null] as const;
@@ -78,9 +86,22 @@ export default function ParkingMapPage() {
     return () => clearInterval(interval);
   }, [selectedSectorId]);
 
+  useEffect(() => {
+    if (!mapSearch.trim()) return;
+    if (Object.keys(slotVehicles).length === 0) return;
+
+    const timeout = setTimeout(() => {
+      handleSearchInMap(false);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [slotVehicles]);
+
   const stats = useMemo(() => {
     const total = slots.length;
-    const disponibles = slots.filter((slot) => slot.visual_status === "DISPONIBLE").length;
+    const disponibles = slots.filter(
+      (slot) => slot.visual_status === "DISPONIBLE"
+    ).length;
     const ocupados = slots.filter((slot) => slot.visual_status === "OCUPADO").length;
     const salida = slots.filter((slot) => slot.visual_status === "SALIDA").length;
     const ocupacion = total === 0 ? 0 : Math.round((ocupados / total) * 100);
@@ -99,10 +120,12 @@ export default function ParkingMapPage() {
     return slots.filter((slot) => slot.visual_status === slotFilter);
   }, [slots, slotFilter]);
 
-  const handleSearchInMap = () => {
+  const handleSearchInMap = (showAlert = true) => {
     if (!mapSearch.trim()) {
       setHighlightedSlotId(null);
-      alert("Ingresa parte del VIN para buscar en el mapa");
+      if (showAlert) {
+        alert("Ingresa parte del VIN para buscar en el mapa");
+      }
       return;
     }
 
@@ -116,7 +139,11 @@ export default function ParkingMapPage() {
       setHighlightedSlotId(null);
       setSelectedSlot(null);
       setSelectedSlotVehicle(null);
-      alert("No se encontró ese VIN en el mapa");
+
+      if (showAlert) {
+        alert("No se encontró ese VIN en el mapa");
+      }
+
       return;
     }
 
@@ -204,7 +231,9 @@ export default function ParkingMapPage() {
 
     if (slot.visual_status === "OCUPADO") {
       try {
-        const response = await api.get<SlotVehicleInfo>(`/vehicles/by-slot/${slot.id}`);
+        const response = await api.get<SlotVehicleInfo>(
+          `/vehicles/by-slot/${slot.id}`
+        );
         setSelectedSlotVehicle(response.data);
       } catch {
         setSelectedSlotVehicle(null);
@@ -314,24 +343,26 @@ export default function ParkingMapPage() {
             placeholder="Buscar VIN dentro del mapa"
           />
 
-          <button style={styles.button} onClick={handleSearchInMap}>
+          <button style={styles.button} onClick={() => handleSearchInMap(true)}>
             Buscar VIN
           </button>
         </div>
 
         <div style={styles.filterRow}>
-          {(["TODOS", "DISPONIBLE", "OCUPADO", "SALIDA"] as SlotFilter[]).map((filter) => (
-            <button
-              key={filter}
-              style={{
-                ...styles.filterButton,
-                ...(slotFilter === filter ? styles.activeFilterButton : {}),
-              }}
-              onClick={() => setSlotFilter(filter)}
-            >
-              {filter}
-            </button>
-          ))}
+          {(["TODOS", "DISPONIBLE", "OCUPADO", "SALIDA"] as SlotFilter[]).map(
+            (filter) => (
+              <button
+                key={filter}
+                style={{
+                  ...styles.filterButton,
+                  ...(slotFilter === filter ? styles.activeFilterButton : {}),
+                }}
+                onClick={() => setSlotFilter(filter)}
+              >
+                {filter}
+              </button>
+            )
+          )}
         </div>
       </div>
 
