@@ -6,6 +6,7 @@ from app.models.carrier import Carrier
 from app.models.sector import Sector
 from app.models.parking_slot import ParkingSlot
 from app.models.vehicle_event import VehicleEvent
+from app.models.shipment import Shipment
 from app.schemas.vehicle import (
     VehicleCreate,
     VehicleUpdate,
@@ -19,21 +20,24 @@ from app.services.vehicle_event_service import create_vehicle_event
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
 
-def validate_relations(db: Session, carrier_id: int | None, sector_id: int | None, slot_id: int | None):
-    if carrier_id is not None:
-        carrier = db.query(Carrier).filter(Carrier.id == carrier_id).first()
-        if not carrier:
-            raise HTTPException(status_code=400, detail="carrier_id no existe")
+def validate_relations(
+    db: Session,
+    carrier_id: int | None,
+    sector_id: int | None,
+    slot_id: int | None,
+    shipment_id: int | None = None,
+):
+    if carrier_id is not None and not db.query(Carrier).filter(Carrier.id == carrier_id).first():
+        raise HTTPException(status_code=400, detail="carrier_id no existe")
 
-    if sector_id is not None:
-        sector = db.query(Sector).filter(Sector.id == sector_id).first()
-        if not sector:
-            raise HTTPException(status_code=400, detail="sector_id no existe")
+    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
+        raise HTTPException(status_code=400, detail="sector_id no existe")
 
-    if slot_id is not None:
-        slot = db.query(ParkingSlot).filter(ParkingSlot.id == slot_id).first()
-        if not slot:
-            raise HTTPException(status_code=400, detail="slot_id no existe")
+    if slot_id is not None and not db.query(ParkingSlot).filter(ParkingSlot.id == slot_id).first():
+        raise HTTPException(status_code=400, detail="slot_id no existe")
+
+    if shipment_id is not None and not db.query(Shipment).filter(Shipment.id == shipment_id).first():
+        raise HTTPException(status_code=400, detail="shipment_id no existe")
 
 
 def build_vehicle_response(vehicle: Vehicle) -> VehicleResponse:
@@ -41,6 +45,8 @@ def build_vehicle_response(vehicle: Vehicle) -> VehicleResponse:
         id=vehicle.id,
         vin=vehicle.vin,
         barcode_id=vehicle.barcode_id,
+        shipment_id=vehicle.shipment_id,
+        shipment_bl=vehicle.shipment.bl_number if vehicle.shipment else None,
         color=vehicle.color,
         brand=vehicle.brand,
         model=vehicle.model,
@@ -64,7 +70,13 @@ def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe un vehículo con ese VIN")
 
-    validate_relations(db, payload.carrier_id, payload.sector_id, payload.slot_id)
+    validate_relations(
+        db,
+        payload.carrier_id,
+        payload.sector_id,
+        payload.slot_id,
+        payload.shipment_id,
+    )
 
     vehicle_data = payload.model_dump()
     vehicle_data["barcode_id"] = vehicle_data["vin"]
@@ -85,7 +97,11 @@ def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)):
 
     vehicle = (
         db.query(Vehicle)
-        .options(joinedload(Vehicle.carrier), joinedload(Vehicle.sector))
+        .options(
+            joinedload(Vehicle.carrier),
+            joinedload(Vehicle.sector),
+            joinedload(Vehicle.shipment),
+        )
         .filter(Vehicle.id == vehicle.id)
         .first()
     )
@@ -99,11 +115,13 @@ def list_vehicles(
     status_filter: str | None = Query(default=None, alias="status"),
     carrier_id: int | None = Query(default=None),
     sector_id: int | None = Query(default=None),
+    shipment_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     query = db.query(Vehicle).options(
         joinedload(Vehicle.carrier),
-        joinedload(Vehicle.sector)
+        joinedload(Vehicle.sector),
+        joinedload(Vehicle.shipment),
     )
 
     if vin:
@@ -118,8 +136,10 @@ def list_vehicles(
     if sector_id is not None:
         query = query.filter(Vehicle.sector_id == sector_id)
 
-    vehicles = query.order_by(Vehicle.id.asc()).all()
+    if shipment_id is not None:
+        query = query.filter(Vehicle.shipment_id == shipment_id)
 
+    vehicles = query.order_by(Vehicle.id.asc()).all()
     return [build_vehicle_response(vehicle) for vehicle in vehicles]
 
 
@@ -127,7 +147,11 @@ def list_vehicles(
 def get_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
     vehicle = (
         db.query(Vehicle)
-        .options(joinedload(Vehicle.carrier), joinedload(Vehicle.sector))
+        .options(
+            joinedload(Vehicle.carrier),
+            joinedload(Vehicle.sector),
+            joinedload(Vehicle.shipment),
+        )
         .filter(Vehicle.id == vehicle_id)
         .first()
     )
@@ -147,10 +171,11 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
     update_data = payload.model_dump(exclude_unset=True)
 
     if "vin" in update_data:
-        existing = db.query(Vehicle).filter(
-            Vehicle.vin == update_data["vin"],
-            Vehicle.id != vehicle_id
-        ).first()
+        existing = (
+            db.query(Vehicle)
+            .filter(Vehicle.vin == update_data["vin"], Vehicle.id != vehicle_id)
+            .first()
+        )
         if existing:
             raise HTTPException(status_code=400, detail="Ya existe otro vehículo con ese VIN")
         update_data["barcode_id"] = update_data["vin"]
@@ -160,6 +185,7 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
         update_data.get("carrier_id", vehicle.carrier_id),
         update_data.get("sector_id", vehicle.sector_id),
         update_data.get("slot_id", vehicle.slot_id),
+        update_data.get("shipment_id", vehicle.shipment_id),
     )
 
     for key, value in update_data.items():
@@ -177,7 +203,11 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
 
     vehicle = (
         db.query(Vehicle)
-        .options(joinedload(Vehicle.carrier), joinedload(Vehicle.sector))
+        .options(
+            joinedload(Vehicle.carrier),
+            joinedload(Vehicle.sector),
+            joinedload(Vehicle.shipment),
+        )
         .filter(Vehicle.id == vehicle.id)
         .first()
     )
@@ -210,7 +240,11 @@ def update_vehicle_status(vehicle_id: int, payload: VehicleStatusUpdate, db: Ses
 
     vehicle = (
         db.query(Vehicle)
-        .options(joinedload(Vehicle.carrier), joinedload(Vehicle.sector))
+        .options(
+            joinedload(Vehicle.carrier),
+            joinedload(Vehicle.sector),
+            joinedload(Vehicle.shipment),
+        )
         .filter(Vehicle.id == vehicle.id)
         .first()
     )
@@ -257,7 +291,11 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
 
     vehicle = (
         db.query(Vehicle)
-        .options(joinedload(Vehicle.carrier), joinedload(Vehicle.sector))
+        .options(
+            joinedload(Vehicle.carrier),
+            joinedload(Vehicle.sector),
+            joinedload(Vehicle.shipment),
+        )
         .filter(Vehicle.id == vehicle.id)
         .first()
     )
@@ -280,7 +318,11 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
 def get_vehicle_by_slot(slot_id: int, db: Session = Depends(get_db)):
     vehicle = (
         db.query(Vehicle)
-        .options(joinedload(Vehicle.carrier), joinedload(Vehicle.sector))
+        .options(
+            joinedload(Vehicle.carrier),
+            joinedload(Vehicle.sector),
+            joinedload(Vehicle.shipment),
+        )
         .filter(Vehicle.slot_id == slot_id)
         .first()
     )

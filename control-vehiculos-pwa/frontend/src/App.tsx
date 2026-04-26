@@ -5,6 +5,9 @@ import VehiclesPage from "./pages/VehiclesPage";
 import UploadPage from "./pages/UploadPage";
 import ReceptionPage from "./pages/ReceptionPage";
 import ParkingMapPage from "./pages/ParkingMapPage";
+import VehicleHistoryPage from "./pages/VehicleHistoryPage";
+import ShipmentDashboardPage from "./pages/ShipmentDashboardPage";
+import LogisticsPage from "./pages/LogisticsPage";
 
 export default function App() {
   return (
@@ -16,6 +19,9 @@ export default function App() {
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/reception" element={<ReceptionPage />} />
           <Route path="/parking-map" element={<ParkingMapPage />} />
+          <Route path="/vehicles/:vehicleId/history" element={<VehicleHistoryPage />} />
+          <Route path="/shipments-dashboard" element={<ShipmentDashboardPage />} />
+          <Route path="/logistics" element={<LogisticsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

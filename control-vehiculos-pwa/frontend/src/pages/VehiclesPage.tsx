@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import VehicleFilters from "../components/VehicleFilters";
 import VehicleTable from "../components/VehicleTable";
@@ -8,12 +9,14 @@ import type { Vehicle } from "../types/vehicle";
 import type { Carrier, Sector } from "../types/catalogs";
 
 export default function VehiclesPage() {
+  const navigate = useNavigate();
+
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false); // 🔥 NUEVO
+  const [createOpen, setCreateOpen] = useState(false);
 
   const [vin, setVin] = useState("");
   const [status, setStatus] = useState("");
@@ -110,13 +113,20 @@ export default function VehiclesPage() {
           </p>
         </div>
 
-        {/* 🔥 BOTÓN NUEVO */}
-        <button style={styles.createButton} onClick={() => setCreateOpen(true)}>
-          + Agregar vehículo
-        </button>
+        <div style={styles.headerActions}>
+          <button
+            style={styles.dashboardButton}
+            onClick={() => navigate("/shipments-dashboard")}
+          >
+            Dashboard BL
+          </button>
+
+          <button style={styles.createButton} onClick={() => setCreateOpen(true)}>
+            + Agregar vehículo
+          </button>
+        </div>
       </div>
 
-      {/* 🔥 FORMULARIO MANUAL */}
       {createOpen ? (
         <VehicleCreateForm
           carriers={carriers}
@@ -177,6 +187,11 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     gap: "12px",
   },
+  headerActions: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
   title: {
     margin: 0,
     marginBottom: "8px",
@@ -190,6 +205,15 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#111827",
     color: "#fff",
     border: "none",
+    borderRadius: "10px",
+    padding: "12px 16px",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  dashboardButton: {
+    background: "#fff",
+    color: "#111827",
+    border: "1px solid #d1d5db",
     borderRadius: "10px",
     padding: "12px 16px",
     fontWeight: 700,

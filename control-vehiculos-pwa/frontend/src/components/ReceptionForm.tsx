@@ -20,12 +20,24 @@ export default function ReceptionForm({
       <h2 style={styles.title}>Formulario de recepción</h2>
 
       <div style={styles.grid}>
+        {/* VIN */}
         <div style={styles.field}>
           <label style={styles.label}>VIN / Código de barra</label>
           <input
             style={styles.input}
             value={formData.vin}
             onChange={(e) => onChange("vin", e.target.value)}
+          />
+        </div>
+
+        {/* BL 🔥 */}
+        <div style={styles.field}>
+          <label style={styles.label}>BL (Bill of Lading)</label>
+          <input
+            style={styles.input}
+            value={formData.bl}
+            onChange={(e) => onChange("bl", e.target.value)}
+            placeholder="Ej: BL123456"
           />
         </div>
 

@@ -11,6 +11,7 @@ import type { VehicleEvent } from "../types/vehicleEvent";
 function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
   return {
     vin: vehicle.vin ?? "",
+    bl: vehicle.bl ?? "",
     color: vehicle.color ?? "",
     brand: vehicle.brand ?? "",
     model: vehicle.model ?? "",
@@ -26,6 +27,7 @@ export default function ReceptionPage() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [formData, setFormData] = useState<ReceptionFormData>({
     vin: "",
+    bl: "",
     color: "",
     brand: "",
     model: "",
@@ -134,6 +136,7 @@ export default function ReceptionPage() {
 
       await api.put(`/vehicles/${vehicle.id}`, {
         vin: formData.vin,
+        bl: formData.bl || null,
         color: formData.color || null,
         brand: formData.brand || null,
         model: formData.model || null,
@@ -168,6 +171,7 @@ export default function ReceptionPage() {
 
       await api.put(`/vehicles/${vehicle.id}`, {
         vin: formData.vin,
+        bl: formData.bl || null,
         color: formData.color || null,
         brand: formData.brand || null,
         model: formData.model || null,
@@ -226,6 +230,7 @@ export default function ReceptionPage() {
           <p><strong>Porteador:</strong> {vehicle.carrier_name ?? "-"}</p>
           <p><strong>Sector:</strong> {vehicle.sector_name ?? "-"}</p>
           <p><strong>Código de barra:</strong> {vehicle.vin}</p>
+          <p><strong>BL:</strong> {vehicle.bl ?? "-"}</p>
         </div>
       ) : null}
 

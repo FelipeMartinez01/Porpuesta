@@ -1,5 +1,6 @@
 import type { Vehicle } from "../types/vehicle";
 import { getImageUrl } from "../utils/url";
+import { useNavigate } from "react-router-dom";
 
 type Props = {
   vehicle: Vehicle | null;
@@ -51,6 +52,8 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 export default function VehicleDetailCard({ vehicle }: Props) {
+  const navigate = useNavigate();
+
   if (!vehicle) {
     return (
       <div style={styles.card}>
@@ -91,6 +94,13 @@ export default function VehicleDetailCard({ vehicle }: Props) {
       <DetailRow label="Sector" value={vehicle.sector_name ?? "-"} />
       <DetailRow label="Slot" value={vehicle.slot_id ?? "-"} />
       <DetailRow label="Notas" value={vehicle.notes ?? "-"} />
+
+      <button
+        style={styles.historyButton}
+        onClick={() => navigate(`/vehicles/${vehicle.id}/history`)}
+      >
+        Ver historial
+      </button>
     </div>
   );
 }
@@ -148,5 +158,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "14px",
     color: "#111827",
     wordBreak: "break-word",
+  },
+  historyButton: {
+    marginTop: "16px",
+    padding: "10px 14px",
+    borderRadius: "10px",
+    border: "none",
+    background: "#111827",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+    width: "100%",
   },
 };

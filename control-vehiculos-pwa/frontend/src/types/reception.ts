@@ -1,5 +1,6 @@
 export type ReceptionFormData = {
   vin: string;
+  bl: string;
   color: string;
   brand: string;
   model: string;

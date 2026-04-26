@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Carrier, Sector } from "../types/catalogs";
+import type { Shipment } from "../types/shipment";
 
 type Props = {
   carriers: Carrier[];
@@ -16,6 +17,8 @@ export default function VehicleCreateForm({
   onCancel,
 }: Props) {
   const [vin, setVin] = useState("");
+  const [shipmentId, setShipmentId] = useState("");
+  const [shipments, setShipments] = useState<Shipment[]>([]);
   const [color, setColor] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -25,17 +28,35 @@ export default function VehicleCreateForm({
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const fetchShipments = async () => {
+    try {
+      const response = await api.get<Shipment[]>("/shipments/");
+      setShipments(response.data);
+    } catch (error) {
+      console.error("Error cargando BL", error);
+      alert("No se pudieron cargar los BL");
+    }
+  };
+
+  useEffect(() => {
+    fetchShipments();
+  }, []);
+
   const handleCreate = async () => {
     if (!vin.trim()) {
       alert("El VIN es obligatorio");
       return;
     }
 
+    const selectedShipment = shipments.find((s) => String(s.id) === shipmentId);
+
     try {
       setLoading(true);
 
       await api.post("/vehicles/", {
         vin: vin.trim(),
+        bl: selectedShipment?.bl_number ?? null,
+        shipment_id: shipmentId ? Number(shipmentId) : null,
         color: color || null,
         brand: brand || null,
         model: model || null,
@@ -49,6 +70,17 @@ export default function VehicleCreateForm({
       });
 
       alert("Vehículo creado correctamente");
+
+      setVin("");
+      setShipmentId("");
+      setColor("");
+      setBrand("");
+      setModel("");
+      setVehicleYear("");
+      setCarrierId("");
+      setSectorId("");
+      setNotes("");
+
       onCreated();
     } catch (error) {
       console.error("Error creando vehículo", error);
@@ -65,22 +97,55 @@ export default function VehicleCreateForm({
       <div style={styles.grid}>
         <div style={styles.field}>
           <label style={styles.label}>VIN *</label>
-          <input style={styles.input} value={vin} onChange={(e) => setVin(e.target.value)} />
+          <input
+            style={styles.input}
+            value={vin}
+            onChange={(e) => setVin(e.target.value)}
+          />
+        </div>
+
+        <div style={styles.field}>
+          <label style={styles.label}>BL / Embarque</label>
+          <select
+            style={styles.input}
+            value={shipmentId}
+            onChange={(e) => setShipmentId(e.target.value)}
+          >
+            <option value="">Sin BL</option>
+            {shipments.map((shipment) => (
+              <option key={shipment.id} value={shipment.id}>
+                {shipment.bl_number} - {shipment.vessel_name ?? "Sin nave"} /{" "}
+                {shipment.voyage_number ?? "Sin viaje"}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div style={styles.field}>
           <label style={styles.label}>Color</label>
-          <input style={styles.input} value={color} onChange={(e) => setColor(e.target.value)} />
+          <input
+            style={styles.input}
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+          />
         </div>
 
         <div style={styles.field}>
           <label style={styles.label}>Marca</label>
-          <input style={styles.input} value={brand} onChange={(e) => setBrand(e.target.value)} />
+          <input
+            style={styles.input}
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+          />
         </div>
 
         <div style={styles.field}>
           <label style={styles.label}>Modelo</label>
-          <input style={styles.input} value={model} onChange={(e) => setModel(e.target.value)} />
+          <input
+            style={styles.input}
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+          />
         </div>
 
         <div style={styles.field}>
@@ -95,7 +160,11 @@ export default function VehicleCreateForm({
 
         <div style={styles.field}>
           <label style={styles.label}>Porteador</label>
-          <select style={styles.input} value={carrierId} onChange={(e) => setCarrierId(e.target.value)}>
+          <select
+            style={styles.input}
+            value={carrierId}
+            onChange={(e) => setCarrierId(e.target.value)}
+          >
             <option value="">Sin porteador</option>
             {carriers.map((carrier) => (
               <option key={carrier.id} value={carrier.id}>
@@ -107,7 +176,11 @@ export default function VehicleCreateForm({
 
         <div style={styles.field}>
           <label style={styles.label}>Sector</label>
-          <select style={styles.input} value={sectorId} onChange={(e) => setSectorId(e.target.value)}>
+          <select
+            style={styles.input}
+            value={sectorId}
+            onChange={(e) => setSectorId(e.target.value)}
+          >
             <option value="">Sin sector</option>
             {sectors.map((sector) => (
               <option key={sector.id} value={sector.id}>
@@ -119,16 +192,28 @@ export default function VehicleCreateForm({
 
         <div style={{ ...styles.field, gridColumn: "1 / -1" }}>
           <label style={styles.label}>Notas</label>
-          <textarea style={styles.textarea} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <textarea
+            style={styles.textarea}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
         </div>
       </div>
 
       <div style={styles.actions}>
-        <button style={styles.primaryButton} onClick={handleCreate} disabled={loading}>
+        <button
+          style={styles.primaryButton}
+          onClick={handleCreate}
+          disabled={loading}
+        >
           {loading ? "Creando..." : "Crear vehículo"}
         </button>
 
-        <button style={styles.secondaryButton} onClick={onCancel} disabled={loading}>
+        <button
+          style={styles.secondaryButton}
+          onClick={onCancel}
+          disabled={loading}
+        >
           Cancelar
         </button>
       </div>
