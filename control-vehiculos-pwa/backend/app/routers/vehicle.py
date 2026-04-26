@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.models.carrier import Carrier
 from app.models.sector import Sector
@@ -17,6 +19,7 @@ from app.schemas.vehicle import (
 )
 from app.schemas.vehicle_event import VehicleEventResponse
 from app.services.vehicle_event_service import create_vehicle_event
+from app.utils.audit import create_audit_log
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
@@ -120,7 +123,11 @@ def release_vehicle_slot_if_needed(db: Session, vehicle: Vehicle):
 
 
 @router.post("/", response_model=VehicleResponse, status_code=status.HTTP_201_CREATED)
-def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)):
+def create_vehicle(
+    payload: VehicleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     existing = db.query(Vehicle).filter(Vehicle.vin == payload.vin).first()
     if existing:
         raise HTTPException(status_code=400, detail="Ya existe un vehículo con ese VIN")
@@ -154,6 +161,23 @@ def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)):
             event_type="SHIPMENT_ASSIGNED",
             description=f"Vehículo asociado al BL ID {vehicle.shipment_id}",
         )
+
+    create_audit_log(
+        db=db,
+        current_user=current_user,
+        action="CREATE_VEHICLE",
+        entity="vehicles",
+        entity_id=vehicle.id,
+        description=f"Creó vehículo VIN {vehicle.vin}",
+        extra_data={
+            "vin": vehicle.vin,
+            "status": vehicle.status,
+            "shipment_id": vehicle.shipment_id,
+            "carrier_id": vehicle.carrier_id,
+            "sector_id": vehicle.sector_id,
+            "slot_id": vehicle.slot_id,
+        },
+    )
 
     db.commit()
 
@@ -221,12 +245,31 @@ def get_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{vehicle_id}", response_model=VehicleResponse)
-def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depends(get_db)):
+def update_vehicle(
+    vehicle_id: int,
+    payload: VehicleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
 
     old_shipment_id = vehicle.shipment_id
+    old_data = {
+        "vin": vehicle.vin,
+        "color": vehicle.color,
+        "brand": vehicle.brand,
+        "model": vehicle.model,
+        "vehicle_year": vehicle.vehicle_year,
+        "carrier_id": vehicle.carrier_id,
+        "sector_id": vehicle.sector_id,
+        "slot_id": vehicle.slot_id,
+        "shipment_id": vehicle.shipment_id,
+        "status": vehicle.status,
+        "notes": vehicle.notes,
+    }
+
     update_data = payload.model_dump(exclude_unset=True)
 
     if "vin" in update_data:
@@ -267,6 +310,20 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
             description=f"BL cambiado de {old_shipment_id or '-'} a {vehicle.shipment_id or '-'}",
         )
 
+    create_audit_log(
+        db=db,
+        current_user=current_user,
+        action="UPDATE_VEHICLE",
+        entity="vehicles",
+        entity_id=vehicle.id,
+        description=f"Actualizó datos del vehículo VIN {vehicle.vin}",
+        extra_data={
+            "vin": vehicle.vin,
+            "old_data": old_data,
+            "updated_fields": update_data,
+        },
+    )
+
     db.commit()
 
     vehicle = reload_vehicle(db, vehicle.id)
@@ -278,6 +335,7 @@ def update_vehicle_status(
     vehicle_id: int,
     payload: VehicleStatusUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
@@ -326,6 +384,20 @@ def update_vehicle_status(
         description=description,
     )
 
+    create_audit_log(
+        db=db,
+        current_user=current_user,
+        action="UPDATE_VEHICLE_STATUS",
+        entity="vehicles",
+        entity_id=vehicle.id,
+        description=f"Cambió estado del vehículo VIN {vehicle.vin}: {current_status} → {new_status}",
+        extra_data={
+            "vin": vehicle.vin,
+            "old_status": current_status,
+            "new_status": new_status,
+        },
+    )
+
     db.commit()
 
     vehicle = reload_vehicle(db, vehicle.id)
@@ -333,7 +405,12 @@ def update_vehicle_status(
 
 
 @router.patch("/{vehicle_id}/assign-slot", response_model=VehicleResponse)
-def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depends(get_db)):
+def assign_slot(
+    vehicle_id: int,
+    payload: VehicleAssignSlot,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
@@ -353,9 +430,13 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
     if slot.visual_status == "OCUPADO":
         raise HTTPException(status_code=400, detail="Ese slot está marcado como ocupado")
 
+    old_slot_id = vehicle.slot_id
+    old_slot_code = None
+
     if vehicle.slot_id:
         old_slot = db.query(ParkingSlot).filter(ParkingSlot.id == vehicle.slot_id).first()
         if old_slot:
+            old_slot_code = old_slot.code
             old_slot.visual_status = "DISPONIBLE"
 
             create_vehicle_event(
@@ -376,6 +457,23 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
         description=f"Vehículo asignado al slot {slot.code}",
     )
 
+    create_audit_log(
+        db=db,
+        current_user=current_user,
+        action="ASSIGN_VEHICLE_SLOT",
+        entity="vehicles",
+        entity_id=vehicle.id,
+        description=f"Asignó vehículo VIN {vehicle.vin} al slot {slot.code}",
+        extra_data={
+            "vin": vehicle.vin,
+            "old_slot_id": old_slot_id,
+            "old_slot_code": old_slot_code,
+            "new_slot_id": slot.id,
+            "new_slot_code": slot.code,
+            "new_status": vehicle.status,
+        },
+    )
+
     db.commit()
 
     vehicle = reload_vehicle(db, vehicle.id)
@@ -383,12 +481,37 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
 
 
 @router.delete("/{vehicle_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
+def delete_vehicle(
+    vehicle_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
 
+    deleted_data = {
+        "id": vehicle.id,
+        "vin": vehicle.vin,
+        "barcode_id": vehicle.barcode_id,
+        "status": vehicle.status,
+        "shipment_id": vehicle.shipment_id,
+        "carrier_id": vehicle.carrier_id,
+        "sector_id": vehicle.sector_id,
+        "slot_id": vehicle.slot_id,
+    }
+
     release_vehicle_slot_if_needed(db, vehicle)
+
+    create_audit_log(
+        db=db,
+        current_user=current_user,
+        action="DELETE_VEHICLE",
+        entity="vehicles",
+        entity_id=vehicle.id,
+        description=f"Eliminó vehículo VIN {vehicle.vin}",
+        extra_data=deleted_data,
+    )
 
     db.delete(vehicle)
     db.commit()

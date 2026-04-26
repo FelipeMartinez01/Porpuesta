@@ -16,6 +16,8 @@ from app.models import (
     User,
 )
 
+from app.models.audit_log import AuditLog
+
 from app.routers.carrier import router as carrier_router
 from app.routers.sector import router as sector_router
 from app.routers.vehicle import router as vehicle_router
@@ -28,6 +30,8 @@ from app.routers.voyage import router as voyage_router
 from app.routers.alert import router as alert_router
 from app.routers.dashboard_general import router as dashboard_general_router
 from app.routers.auth import router as auth_router
+from app.routers.audit_logs import router as audit_logs_router
+from app.routers.emergency_admin import router as emergency_admin_router
 
 app = FastAPI(title="Control Vehiculos API")
 
@@ -64,3 +68,5 @@ app.include_router(vessel_router)
 app.include_router(voyage_router)
 app.include_router(alert_router)
 app.include_router(dashboard_general_router)
+app.include_router(audit_logs_router)
+app.include_router(emergency_admin_router)

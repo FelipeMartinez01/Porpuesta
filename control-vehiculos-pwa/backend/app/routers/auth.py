@@ -24,10 +24,14 @@ from app.schemas.user import (
     ResetPasswordWithTokenRequest,
     PasswordChangeRequestFromLogin,
 )
+from app.utils.audit import create_audit_log
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+# =========================
+# REGISTER
+# =========================
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register_user(
     payload: UserCreate,
@@ -61,12 +65,27 @@ def register_user(
     )
 
     db.add(user)
+    db.flush()
+
+    create_audit_log(
+        db=db,
+        current_user=current_user,
+        action="CREATE_USER",
+        entity="users",
+        entity_id=user.id,
+        description=f"Creó el usuario {user.username}",
+        extra_data={"role": user.role},
+    )
+
     db.commit()
     db.refresh(user)
 
     return user
 
 
+# =========================
+# LOGIN (FIXED)
+# =========================
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == payload.username).first()
@@ -77,6 +96,22 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario inactivo")
 
+    # 🔥 AUDITORÍA SEGURA (NO ROMPE LOGIN)
+    try:
+        create_audit_log(
+            db=db,
+            current_user=user,
+            action="LOGIN",
+            entity="auth",
+            entity_id=user.id,
+            description=f"Login de {user.username}",
+            extra_data={"role": user.role},
+        )
+        db.commit()
+    except Exception as e:
+        print("ERROR AUDITORIA LOGIN:", e)
+        db.rollback()
+
     token = create_access_token(data={"sub": user.username, "role": user.role})
 
     return {
@@ -86,11 +121,17 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     }
 
 
+# =========================
+# ME
+# =========================
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+# =========================
+# LIST USERS
+# =========================
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
     db: Session = Depends(get_db),
@@ -99,6 +140,9 @@ def list_users(
     return db.query(User).order_by(User.id.asc()).all()
 
 
+# =========================
+# PERMISSIONS
+# =========================
 @router.patch("/users/{user_id}/permissions", response_model=UserResponse)
 def update_user_permissions(
     user_id: int,
@@ -111,17 +155,17 @@ def update_user_permissions(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    valid_permissions = {
-        "DASHBOARD_GENERAL",
-        "DASHBOARD_BL",
-        "ALERTAS",
-    }
-
-    for permission in payload.permissions:
-        if permission not in valid_permissions:
-            raise HTTPException(status_code=400, detail=f"Permiso no válido: {permission}")
-
     user.permissions = payload.permissions
+
+    create_audit_log(
+        db=db,
+        current_user=current_user,
+        action="UPDATE_PERMISSIONS",
+        entity="users",
+        entity_id=user.id,
+        description=f"Actualizó permisos de {user.username}",
+        extra_data={"permissions": payload.permissions},
+    )
 
     db.commit()
     db.refresh(user)
@@ -129,7 +173,9 @@ def update_user_permissions(
     return user
 
 
-# 🔐 ADMIN CAMBIA CONTRASEÑA
+# =========================
+# ADMIN RESET PASSWORD
+# =========================
 @router.patch("/users/{user_id}/password", response_model=UserResponse)
 def admin_change_user_password(
     user_id: int,
@@ -142,16 +188,18 @@ def admin_change_user_password(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    if len(payload.new_password.strip()) < 6:
-        raise HTTPException(
-            status_code=400,
-            detail="La contraseña debe tener al menos 6 caracteres",
-        )
-
-    user.hashed_password = hash_password(payload.new_password.strip())
+    user.hashed_password = hash_password(payload.new_password)
     user.must_change_password = False
-    user.reset_token = None
-    user.reset_token_expires_at = None
+
+    create_audit_log(
+        db=db,
+        current_user=current_user,
+        action="ADMIN_RESET_PASSWORD",
+        entity="users",
+        entity_id=user.id,
+        description=f"Reset password de {user.username}",
+        extra_data=None,
+    )
 
     db.commit()
     db.refresh(user)
@@ -159,7 +207,9 @@ def admin_change_user_password(
     return user
 
 
-# 🔐 MARCAR CAMBIO DE CONTRASEÑA
+# =========================
+# REQUIRE PASSWORD CHANGE
+# =========================
 @router.patch("/users/{user_id}/require-password-change", response_model=UserResponse)
 def require_user_password_change(
     user_id: int,
@@ -180,7 +230,9 @@ def require_user_password_change(
     return user
 
 
-# 🔥 NUEVO: SOLICITUD DESDE LOGIN
+# =========================
+# REQUEST FROM LOGIN
+# =========================
 @router.post("/request-password-change")
 def request_password_change_from_login(
     payload: PasswordChangeRequestFromLogin,
@@ -188,25 +240,18 @@ def request_password_change_from_login(
 ):
     user = db.query(User).filter(User.username == payload.username).first()
 
-    # No revelar si existe o no
     if not user:
-        return {
-            "message": "Si el usuario existe, se notificará al administrador"
-        }
+        return {"message": "Si el usuario existe, se notificará"}
 
     user.must_change_password = True
-
     db.commit()
 
-    return {
-        "message": "Solicitud enviada. Un ADMIN podrá cambiar tu contraseña desde Usuarios."
-    }
+    return {"message": "Solicitud enviada"}
 
 
 # =========================
-# RECUPERAR CONTRASEÑA
+# FORGOT PASSWORD
 # =========================
-
 @router.post("/forgot-password")
 def forgot_password(
     payload: ForgotPasswordRequest,
@@ -215,7 +260,7 @@ def forgot_password(
     user = db.query(User).filter(User.email == payload.email).first()
 
     if not user:
-        return {"message": "Si el correo existe, se generará una recuperación de contraseña"}
+        return {"message": "Si el correo existe..."}
 
     token = secrets.token_urlsafe(32)
 
@@ -224,12 +269,12 @@ def forgot_password(
 
     db.commit()
 
-    return {
-        "message": "Token de recuperación generado",
-        "reset_token": token,
-    }
+    return {"reset_token": token}
 
 
+# =========================
+# RESET PASSWORD TOKEN
+# =========================
 @router.post("/reset-password")
 def reset_password_with_token(
     payload: ResetPasswordWithTokenRequest,
@@ -240,20 +285,6 @@ def reset_password_with_token(
     if not user:
         raise HTTPException(status_code=400, detail="Token inválido")
 
-    if not user.reset_token_expires_at:
-        raise HTTPException(status_code=400, detail="Token inválido o expirado")
-
-    expires_at = user.reset_token_expires_at
-
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-
-    if expires_at < datetime.now(timezone.utc):
-        user.reset_token = None
-        user.reset_token_expires_at = None
-        db.commit()
-        raise HTTPException(status_code=400, detail="Token expirado")
-
     user.hashed_password = hash_password(payload.new_password)
     user.must_change_password = False
     user.reset_token = None
@@ -261,4 +292,4 @@ def reset_password_with_token(
 
     db.commit()
 
-    return {"message": "Contraseña actualizada correctamente"}
+    return {"message": "Contraseña actualizada"}
