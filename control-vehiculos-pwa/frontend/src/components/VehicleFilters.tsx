@@ -1,16 +1,20 @@
 import type { Carrier, Sector } from "../types/catalogs";
+import type { Shipment } from "../types/shipment";
 
 type Props = {
   vin: string;
   status: string;
   carrierId: string;
   sectorId: string;
+  shipmentId: string;
   carriers: Carrier[];
   sectors: Sector[];
+  shipments: Shipment[];
   onVinChange: (value: string) => void;
   onStatusChange: (value: string) => void;
   onCarrierChange: (value: string) => void;
   onSectorChange: (value: string) => void;
+  onShipmentChange: (value: string) => void;
   onSearch: () => void;
   onClear: () => void;
 };
@@ -20,12 +24,15 @@ export default function VehicleFilters({
   status,
   carrierId,
   sectorId,
+  shipmentId,
   carriers,
   sectors,
+  shipments,
   onVinChange,
   onStatusChange,
   onCarrierChange,
   onSectorChange,
+  onShipmentChange,
   onSearch,
   onClear,
 }: Props) {
@@ -43,6 +50,23 @@ export default function VehicleFilters({
       </div>
 
       <div style={styles.field}>
+        <label style={styles.label}>BL / Embarque</label>
+        <select
+          style={styles.input}
+          value={shipmentId}
+          onChange={(e) => onShipmentChange(e.target.value)}
+        >
+          <option value="">Todos</option>
+          {shipments.map((shipment) => (
+            <option key={shipment.id} value={shipment.id}>
+              {shipment.bl_number} - {shipment.vessel_name ?? "Sin nave"} /{" "}
+              {shipment.voyage_number ?? "Sin viaje"}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={styles.field}>
         <label style={styles.label}>Estado</label>
         <select
           style={styles.input}
@@ -51,8 +75,10 @@ export default function VehicleFilters({
         >
           <option value="">Todos</option>
           <option value="FALTANTE">FALTANTE</option>
+          <option value="DIRECTO">DIRECTO</option>
+          <option value="ALMACENADO">ALMACENADO</option>
           <option value="EN_TRANSITO">EN_TRANSITO</option>
-          <option value="RECEPCIONADO">RECEPCIONADO</option>
+          <option value="DESPACHADO">DESPACHADO</option>
         </select>
       </div>
 

@@ -28,6 +28,7 @@ export default function VehiclesPage() {
   const [status, setStatus] = useState("");
   const [carrierId, setCarrierId] = useState("");
   const [sectorId, setSectorId] = useState("");
+  const [shipmentId, setShipmentId] = useState("");
 
   const fetchVehicles = async () => {
     try {
@@ -39,6 +40,7 @@ export default function VehiclesPage() {
       if (status) params.status = status;
       if (carrierId) params.carrier_id = Number(carrierId);
       if (sectorId) params.sector_id = Number(sectorId);
+      if (shipmentId) params.shipment_id = Number(shipmentId);
 
       const response = await api.get<Vehicle[]>("/vehicles/", { params });
       setVehicles(response.data);
@@ -95,6 +97,7 @@ export default function VehiclesPage() {
     setStatus("");
     setCarrierId("");
     setSectorId("");
+    setShipmentId("");
 
     try {
       setLoading(true);
@@ -153,12 +156,15 @@ export default function VehiclesPage() {
         status={status}
         carrierId={carrierId}
         sectorId={sectorId}
+        shipmentId={shipmentId}
         carriers={carriers}
         sectors={sectors}
+        shipments={shipments}
         onVinChange={setVin}
         onStatusChange={setStatus}
         onCarrierChange={setCarrierId}
         onSectorChange={setSectorId}
+        onShipmentChange={setShipmentId}
         onSearch={handleSearch}
         onClear={handleClear}
       />

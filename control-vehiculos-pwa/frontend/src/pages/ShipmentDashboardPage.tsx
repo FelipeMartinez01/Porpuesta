@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { ShipmentDashboard } from "../types/shipment";
 
 export default function ShipmentDashboardPage() {
+  const navigate = useNavigate();
+
   const [items, setItems] = useState<ShipmentDashboard[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -97,6 +100,13 @@ export default function ShipmentDashboardPage() {
                   <span>Despachado</span>
                 </div>
               </div>
+
+              <button
+                style={styles.detailButton}
+                onClick={() => navigate(`/shipments/${item.shipment_id}`)}
+              >
+                Ver detalle BL
+              </button>
             </div>
           );
         })}
@@ -200,6 +210,17 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "4px",
     textAlign: "center",
     fontSize: "13px",
+  },
+  detailButton: {
+    marginTop: "16px",
+    padding: "10px 14px",
+    borderRadius: "10px",
+    border: "none",
+    background: "#111827",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+    width: "100%",
   },
   empty: {
     background: "#fff",

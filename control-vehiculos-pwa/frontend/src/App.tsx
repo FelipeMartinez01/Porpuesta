@@ -7,6 +7,7 @@ import ReceptionPage from "./pages/ReceptionPage";
 import ParkingMapPage from "./pages/ParkingMapPage";
 import VehicleHistoryPage from "./pages/VehicleHistoryPage";
 import ShipmentDashboardPage from "./pages/ShipmentDashboardPage";
+import ShipmentDetailPage from "./pages/ShipmentDetailPage";
 import LogisticsPage from "./pages/LogisticsPage";
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/parking-map" element={<ParkingMapPage />} />
           <Route path="/vehicles/:vehicleId/history" element={<VehicleHistoryPage />} />
           <Route path="/shipments-dashboard" element={<ShipmentDashboardPage />} />
+          <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage />} />
           <Route path="/logistics" element={<LogisticsPage />} />
         </Route>
       </Routes>
