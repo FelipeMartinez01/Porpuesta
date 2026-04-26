@@ -56,6 +56,8 @@ class VehicleResponse(BaseModel):
 
     shipment_id: int | None = None
     shipment_bl: str | None = None
+    vessel_name: str | None = None
+    voyage_number: str | None = None
 
     barcode_id: str | None = None
 
