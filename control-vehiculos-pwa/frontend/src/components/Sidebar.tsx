@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 type Props = {
   isMobile?: boolean;
@@ -8,18 +9,73 @@ type Props = {
   onClose?: () => void;
 };
 
-const links = [
-  { to: "/", label: "Dashboard" },
-  { to: "/vehicles", label: "Vehículos" },
-  { to: "/upload", label: "Carga masiva" },
-  { to: "/reception", label: "Recepción" },
-  { to: "/parking-map", label: "Mapa de posiciones" },
-  { to: "/dispatch-direct", label: "Despacho directo" },
-  { to: "/dispatch-yard", label: "Despacho patio" },
-  { to: "/logistics", label: "Logística" },
-  { to: "/carriers", label: "Porteadores" },
-  { to: "/alerts", label: "Alertas" },
-  { to: "/dashboard-general", label: "Dashboard general" },
+type SidebarLink = {
+  to: string;
+  label: string;
+  roles: string[];
+};
+
+const links: SidebarLink[] = [
+  {
+    to: "/",
+    label: "Dashboard",
+    roles: ["ADMIN", "SUPERVISOR", "OPERADOR", "CONTROL_DOCUMENTO"],
+  },
+  {
+    to: "/dashboard-general",
+    label: "Dashboard general",
+    roles: ["ADMIN"],
+  },
+  {
+    to: "/users",
+    label: "Usuarios",
+    roles: ["ADMIN"],
+  },
+  {
+    to: "/vehicles",
+    label: "Vehículos",
+    roles: ["ADMIN", "SUPERVISOR", "OPERADOR"],
+  },
+  {
+    to: "/upload",
+    label: "Carga masiva",
+    roles: ["ADMIN", "CONTROL_DOCUMENTO"],
+  },
+  {
+    to: "/reception",
+    label: "Recepción",
+    roles: ["ADMIN", "SUPERVISOR", "OPERADOR"],
+  },
+  {
+    to: "/parking-map",
+    label: "Mapa de posiciones",
+    roles: ["ADMIN", "SUPERVISOR", "OPERADOR"],
+  },
+  {
+    to: "/dispatch-direct",
+    label: "Despacho directo",
+    roles: ["ADMIN", "SUPERVISOR", "OPERADOR"],
+  },
+  {
+    to: "/dispatch-yard",
+    label: "Despacho patio",
+    roles: ["ADMIN", "SUPERVISOR", "OPERADOR"],
+  },
+  {
+    to: "/logistics",
+    label: "Logística",
+    roles: ["ADMIN", "SUPERVISOR"],
+  },
+  {
+    to: "/carriers",
+    label: "Porteadores",
+    roles: ["ADMIN"],
+  },
+  {
+    to: "/alerts",
+    label: "Alertas",
+    roles: ["ADMIN"],
+  },
 ];
 
 type AlertsCounterResponse = {
@@ -31,13 +87,30 @@ export default function Sidebar({
   isOpen = false,
   onClose,
 }: Props) {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [alertsCount, setAlertsCount] = useState(0);
 
+  const userRole = user?.role ?? "";
+
+  const visibleLinks = links.filter((link) => link.roles.includes(userRole));
+
   const fetchAlertsCount = async () => {
+    if (userRole !== "ADMIN") {
+      setAlertsCount(0);
+      return;
+    }
+
     try {
       const response = await api.get<AlertsCounterResponse>("/alerts/");
       setAlertsCount(response.data.total_alerts ?? 0);
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 401) {
+        logout();
+        navigate("/login", { replace: true });
+        return;
+      }
+
       console.error("Error cargando contador de alertas", error);
       setAlertsCount(0);
     }
@@ -51,7 +124,12 @@ export default function Sidebar({
     }, 15000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [userRole]);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <aside
@@ -80,8 +158,13 @@ export default function Sidebar({
         </div>
       </div>
 
+      <div style={styles.userBox}>
+        <strong>{user?.username ?? "Usuario"}</strong>
+        <span>{user?.role ?? "-"}</span>
+      </div>
+
       <nav style={styles.nav}>
-        {links.map((link) => {
+        {visibleLinks.map((link) => {
           const isAlertsLink = link.to === "/alerts";
 
           return (
@@ -103,6 +186,10 @@ export default function Sidebar({
           );
         })}
       </nav>
+
+      <button style={styles.logoutButton} onClick={handleLogout}>
+        Cerrar sesión
+      </button>
     </aside>
   );
 }
@@ -116,7 +203,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "24px 16px",
     display: "flex",
     flexDirection: "column",
-    gap: "24px",
+    gap: "18px",
     boxSizing: "border-box",
     overflowY: "auto",
   },
@@ -148,10 +235,20 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontWeight: 800,
   },
+  userBox: {
+    background: "#1f2937",
+    borderRadius: "12px",
+    padding: "12px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    fontSize: "13px",
+  },
   nav: {
     display: "flex",
     flexDirection: "column",
     gap: "10px",
+    flex: 1,
   },
   link: {
     padding: "12px 14px",
@@ -180,5 +277,14 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     fontSize: "12px",
     fontWeight: 900,
+  },
+  logoutButton: {
+    padding: "12px",
+    borderRadius: "10px",
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "#991b1b",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 800,
   },
 };

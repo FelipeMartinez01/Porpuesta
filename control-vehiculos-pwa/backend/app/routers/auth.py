@@ -19,6 +19,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 def register_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN")),
 ):
     existing_username = db.query(User).filter(User.username == payload.username).first()
     if existing_username:
@@ -29,7 +30,7 @@ def register_user(
         if existing_email:
             raise HTTPException(status_code=400, detail="El email ya existe")
 
-    valid_roles = {"ADMIN", "SUPERVISOR", "OPERADOR"}
+    valid_roles = {"ADMIN", "SUPERVISOR", "OPERADOR", "CONTROL_DOCUMENTO"}
     role = payload.role.upper()
 
     if role not in valid_roles:
@@ -52,27 +53,16 @@ def register_user(
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(
-    payload: LoginRequest,
-    db: Session = Depends(get_db),
-):
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == payload.username).first()
 
-    if not user:
-        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
-
-    if not verify_password(payload.password, user.hashed_password):
+    if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuario inactivo")
 
-    token = create_access_token(
-        data={
-            "sub": user.username,
-            "role": user.role,
-        }
-    )
+    token = create_access_token(data={"sub": user.username, "role": user.role})
 
     return {
         "access_token": token,
@@ -92,3 +82,25 @@ def list_users(
     current_user: User = Depends(require_roles("ADMIN")),
 ):
     return db.query(User).order_by(User.id.asc()).all()
+
+@router.patch("/users/{user_id}/toggle-active", response_model=UserResponse)
+def toggle_user_active(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN")),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    # 🔥 evitar que se desactive a sí mismo
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="No puedes desactivarte a ti mismo")
+
+    user.is_active = not user.is_active
+
+    db.commit()
+    db.refresh(user)
+
+    return user

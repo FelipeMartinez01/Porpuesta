@@ -1,5 +1,9 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
+
+import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import VehiclesPage from "./pages/VehiclesPage";
 import UploadPage from "./pages/UploadPage";
@@ -14,28 +18,59 @@ import DirectDispatchPage from "./pages/DirectDispatchPage";
 import YardDispatchPage from "./pages/YardDispatchPage";
 import AlertsPage from "./pages/AlertsPage";
 import DashboardGeneralPage from "./pages/DashboardGeneralPage";
+import UsersPage from "./pages/UsersPage";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/vehicles" element={<VehiclesPage />} />
-          <Route path="/upload" element={<UploadPage />} />
-          <Route path="/reception" element={<ReceptionPage />} />
-          <Route path="/parking-map" element={<ParkingMapPage />} />
-          <Route path="/vehicles/:vehicleId/history" element={<VehicleHistoryPage />} />
-          <Route path="/shipments-dashboard" element={<ShipmentDashboardPage />} />
-          <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage />} />
-          <Route path="/logistics" element={<LogisticsPage />} />
-          <Route path="/carriers" element={<CarriersPage />} />
-          <Route path="/dispatch-direct" element={<DirectDispatchPage />} />
-          <Route path="/dispatch-yard" element={<YardDispatchPage />} />
-          <Route path="/alerts" element={<AlertsPage />} />
-          <Route path="/dashboard-general" element={<DashboardGeneralPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+
+          {/*PUBLICO */}
+          <Route path="/login" element={<LoginPage />} />
+
+          {/*BASE (login) */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppLayout />}>
+
+              {/*ACCESO GENERAL*/}
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/vehicles" element={<VehiclesPage />} />
+              <Route path="/vehicles/:vehicleId/history" element={<VehicleHistoryPage />} />
+              <Route path="/shipments-dashboard" element={<ShipmentDashboardPage />} />
+              <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage />} />
+
+              {/*OPERACIÓN*/}
+              <Route element={<ProtectedRoute allowedRoles={["OPERADOR", "SUPERVISOR", "ADMIN"]} />}>
+                <Route path="/reception" element={<ReceptionPage />} />
+                <Route path="/parking-map" element={<ParkingMapPage />} />
+                <Route path="/dispatch-direct" element={<DirectDispatchPage />} />
+                <Route path="/dispatch-yard" element={<YardDispatchPage />} />
+              </Route>
+
+              {/*DOCUMENTACIÓN*/}
+              <Route element={<ProtectedRoute allowedRoles={["CONTROL_DOCUMENTO", "ADMIN"]} />}>
+                <Route path="/upload" element={<UploadPage />} />
+              </Route>
+
+              {/*SUPERVISIÓN*/}
+              <Route element={<ProtectedRoute allowedRoles={["SUPERVISOR", "ADMIN"]} />}>
+                <Route path="/logistics" element={<LogisticsPage />} />
+              </Route>
+
+              {/*ADMIN*/}
+              <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
+                <Route path="/dashboard-general" element={<DashboardGeneralPage />} />
+                <Route path="/carriers" element={<CarriersPage />} />
+                <Route path="/alerts" element={<AlertsPage />} />
+                <Route path="/users" element={<UsersPage />} />
+              </Route>
+
+            </Route>
+          </Route>
+
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
