@@ -1,11 +1,12 @@
 import pandas as pd
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
+
 from app.models.vehicle import Vehicle
 
 
 def read_file(file: UploadFile):
-    filename = file.filename.lower()
+    filename = file.filename.lower() if file.filename else ""
 
     if filename.endswith(".xlsx"):
         df = pd.read_excel(file.file)
@@ -20,10 +21,21 @@ def read_file(file: UploadFile):
 def clean_value(value):
     if pd.isna(value):
         return None
+
+    if isinstance(value, str):
+        value = value.strip()
+        return value if value else None
+
     return value
 
 
-def import_vehicles(file: UploadFile, db: Session, carrier_id: int, sector_id: int):
+def import_vehicles(
+    file: UploadFile,
+    db: Session,
+    carrier_id: int,
+    sector_id: int,
+    shipment_id: int,
+):
     df = read_file(file)
 
     if "vin" not in df.columns:
@@ -34,7 +46,8 @@ def import_vehicles(file: UploadFile, db: Session, carrier_id: int, sector_id: i
 
     for index, row in df.iterrows():
         try:
-            vin = str(clean_value(row.get("vin"))).strip() if clean_value(row.get("vin")) is not None else None
+            raw_vin = clean_value(row.get("vin"))
+            vin = str(raw_vin).strip() if raw_vin is not None else None
 
             if not vin:
                 errors.append(f"Fila {index + 2}: VIN vacío")
@@ -55,13 +68,17 @@ def import_vehicles(file: UploadFile, db: Session, carrier_id: int, sector_id: i
             vehicle = Vehicle(
                 vin=vin,
                 barcode_id=vin,
+                shipment_id=shipment_id,
                 color=clean_value(row.get("color")),
                 brand=clean_value(row.get("brand")),
                 model=clean_value(row.get("model")),
                 vehicle_year=vehicle_year,
                 carrier_id=carrier_id,
                 sector_id=sector_id,
-                status="FALTANTE"
+                slot_id=None,
+                status="FALTANTE",
+                photo_url=None,
+                notes=clean_value(row.get("notes")),
             )
 
             db.add(vehicle)
@@ -76,5 +93,5 @@ def import_vehicles(file: UploadFile, db: Session, carrier_id: int, sector_id: i
         "created_count": len(created),
         "errors_count": len(errors),
         "created": created,
-        "errors": errors
+        "errors": errors,
     }

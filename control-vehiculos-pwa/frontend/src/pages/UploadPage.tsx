@@ -1,29 +1,37 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Carrier, Sector } from "../types/catalogs";
+import type { Shipment } from "../types/shipment";
 import type { UploadResult } from "../types/upload";
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [carrierId, setCarrierId] = useState("");
   const [sectorId, setSectorId] = useState("");
+  const [shipmentId, setShipmentId] = useState("");
+
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<UploadResult | null>(null);
 
   const fetchCatalogs = async () => {
     try {
-      const [carriersResponse, sectorsResponse] = await Promise.all([
-        api.get<Carrier[]>("/carriers/"),
-        api.get<Sector[]>("/sectors/"),
-      ]);
+      const [carriersResponse, sectorsResponse, shipmentsResponse] =
+        await Promise.all([
+          api.get<Carrier[]>("/carriers/"),
+          api.get<Sector[]>("/sectors/"),
+          api.get<Shipment[]>("/shipments/"),
+        ]);
 
       setCarriers(carriersResponse.data);
       setSectors(sectorsResponse.data);
+      setShipments(shipmentsResponse.data);
     } catch (error) {
       console.error("Error cargando catálogos", error);
-      alert("No se pudieron cargar porteadores o sectores");
+      alert("No se pudieron cargar porteadores, sectores o BL");
     }
   };
 
@@ -47,6 +55,11 @@ export default function UploadPage() {
       return;
     }
 
+    if (!shipmentId) {
+      alert("Debes seleccionar un BL");
+      return;
+    }
+
     try {
       setUploading(true);
       setResult(null);
@@ -58,6 +71,7 @@ export default function UploadPage() {
         params: {
           carrier_id: Number(carrierId),
           sector_id: Number(sectorId),
+          shipment_id: Number(shipmentId),
         },
         headers: {
           "Content-Type": "multipart/form-data",
@@ -77,7 +91,7 @@ export default function UploadPage() {
     <div style={styles.page}>
       <h1 style={styles.title}>Carga Masiva</h1>
       <p style={styles.subtitle}>
-        Sube un archivo Excel o CSV para registrar múltiples vehículos.
+        Sube un archivo Excel o CSV para registrar múltiples vehículos asociados a un BL.
       </p>
 
       <div style={styles.card}>
@@ -92,6 +106,23 @@ export default function UploadPage() {
                 setFile(selectedFile);
               }}
             />
+          </div>
+
+          <div style={styles.field}>
+            <label style={styles.label}>BL / Embarque</label>
+            <select
+              value={shipmentId}
+              onChange={(e) => setShipmentId(e.target.value)}
+              style={styles.input}
+            >
+              <option value="">Selecciona un BL</option>
+              {shipments.map((shipment) => (
+                <option key={shipment.id} value={shipment.id}>
+                  {shipment.bl_number} - {shipment.vessel_name ?? "Sin nave"} /{" "}
+                  {shipment.voyage_number ?? "Sin viaje"}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div style={styles.field}>
@@ -141,7 +172,8 @@ export default function UploadPage() {
           vin | color | brand | model | vehicle_year
         </div>
         <p>
-          La columna <strong>vin</strong> es obligatoria y será usada también como código de barra.
+          La columna <strong>vin</strong> es obligatoria. El BL se selecciona arriba y se asigna
+          automáticamente a todos los vehículos cargados.
         </p>
       </div>
 
@@ -149,8 +181,12 @@ export default function UploadPage() {
         <div style={styles.resultGrid}>
           <div style={styles.resultCard}>
             <h3>Resumen de carga</h3>
-            <p><strong>Vehículos creados:</strong> {result.created_count}</p>
-            <p><strong>Errores:</strong> {result.errors_count}</p>
+            <p>
+              <strong>Vehículos creados:</strong> {result.created_count}
+            </p>
+            <p>
+              <strong>Errores:</strong> {result.errors_count}
+            </p>
           </div>
 
           <div style={styles.resultCard}>
