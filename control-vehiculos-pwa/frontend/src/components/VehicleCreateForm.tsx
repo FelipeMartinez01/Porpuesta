@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
-import { api } from "../api/client";
+import { useState } from "react";
 import type { Carrier, Sector } from "../types/catalogs";
 import type { Shipment } from "../types/shipment";
+import { api } from "../api/client";
 
 type Props = {
   carriers: Carrier[];
   sectors: Sector[];
+  shipments: Shipment[];
   onCreated: () => void;
   onCancel: () => void;
 };
@@ -13,12 +14,12 @@ type Props = {
 export default function VehicleCreateForm({
   carriers,
   sectors,
+  shipments,
   onCreated,
   onCancel,
 }: Props) {
   const [vin, setVin] = useState("");
   const [shipmentId, setShipmentId] = useState("");
-  const [shipments, setShipments] = useState<Shipment[]>([]);
   const [color, setColor] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -28,34 +29,17 @@ export default function VehicleCreateForm({
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const fetchShipments = async () => {
-    try {
-      const response = await api.get<Shipment[]>("/shipments/");
-      setShipments(response.data);
-    } catch (error) {
-      console.error("Error cargando BL", error);
-      alert("No se pudieron cargar los BL");
-    }
-  };
-
-  useEffect(() => {
-    fetchShipments();
-  }, []);
-
   const handleCreate = async () => {
     if (!vin.trim()) {
       alert("El VIN es obligatorio");
       return;
     }
 
-    const selectedShipment = shipments.find((s) => String(s.id) === shipmentId);
-
     try {
       setLoading(true);
 
       await api.post("/vehicles/", {
         vin: vin.trim(),
-        bl: selectedShipment?.bl_number ?? null,
         shipment_id: shipmentId ? Number(shipmentId) : null,
         color: color || null,
         brand: brand || null,

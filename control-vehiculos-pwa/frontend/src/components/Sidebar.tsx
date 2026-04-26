@@ -6,6 +6,9 @@ const links = [
   { to: "/upload", label: "Carga masiva" },
   { to: "/reception", label: "Recepción" },
   { to: "/parking-map", label: "Mapa de posiciones" },
+
+  // 🔥 NUEVO
+  { to: "/logistics", label: "Logística" },
 ];
 
 export default function Sidebar() {

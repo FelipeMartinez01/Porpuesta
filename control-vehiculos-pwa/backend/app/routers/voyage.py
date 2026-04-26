@@ -82,10 +82,10 @@ def update_voyage(voyage_id: int, payload: VoyageUpdate, db: Session = Depends(g
 
     data = payload.model_dump(exclude_unset=True)
 
-    if "vessel_id" in data:
-      vessel = db.query(Vessel).filter(Vessel.id == data["vessel_id"]).first()
-      if not vessel:
-          raise HTTPException(status_code=400, detail="vessel_id no existe")
+    if "vessel_id" in data and data["vessel_id"] is not None:
+        vessel = db.query(Vessel).filter(Vessel.id == data["vessel_id"]).first()
+        if not vessel:
+            raise HTTPException(status_code=400, detail="vessel_id no existe")
 
     for key, value in data.items():
         setattr(voyage, key, value)

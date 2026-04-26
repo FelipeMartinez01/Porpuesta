@@ -8,6 +8,7 @@ import VehicleCreateForm from "../components/VehicleCreateForm";
 import VehicleEditModal from "../components/VehicleEditModal";
 import type { Vehicle } from "../types/vehicle";
 import type { Carrier, Sector } from "../types/catalogs";
+import type { Shipment } from "../types/shipment";
 
 export default function VehiclesPage() {
   const navigate = useNavigate();
@@ -18,6 +19,8 @@ export default function VehiclesPage() {
 
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -49,16 +52,19 @@ export default function VehiclesPage() {
 
   const fetchCatalogs = async () => {
     try {
-      const [carriersResponse, sectorsResponse] = await Promise.all([
-        api.get<Carrier[]>("/carriers/"),
-        api.get<Sector[]>("/sectors/"),
-      ]);
+      const [carriersResponse, sectorsResponse, shipmentsResponse] =
+        await Promise.all([
+          api.get<Carrier[]>("/carriers/"),
+          api.get<Sector[]>("/sectors/"),
+          api.get<Shipment[]>("/shipments/"),
+        ]);
 
       setCarriers(carriersResponse.data);
       setSectors(sectorsResponse.data);
+      setShipments(shipmentsResponse.data);
     } catch (error) {
       console.error("Error cargando catálogos", error);
-      alert("No se pudieron cargar porteadores o sectores");
+      alert("No se pudieron cargar porteadores, sectores o BL");
     }
   };
 
@@ -132,9 +138,11 @@ export default function VehiclesPage() {
         <VehicleCreateForm
           carriers={carriers}
           sectors={sectors}
+          shipments={shipments}
           onCreated={async () => {
             setCreateOpen(false);
             await fetchVehicles();
+            await fetchCatalogs();
           }}
           onCancel={() => setCreateOpen(false)}
         />
@@ -176,6 +184,7 @@ export default function VehiclesPage() {
         vehicle={editingVehicle}
         carriers={carriers}
         sectors={sectors}
+        shipments={shipments}
         onClose={() => setEditingVehicle(null)}
         onUpdated={async () => {
           await fetchVehicles();
