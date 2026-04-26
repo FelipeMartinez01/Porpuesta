@@ -19,6 +19,7 @@ const links = [
   { to: "/logistics", label: "Logística" },
   { to: "/carriers", label: "Porteadores" },
   { to: "/alerts", label: "Alertas" },
+  { to: "/dashboard-general", label: "Dashboard general" },
 ];
 
 type AlertsCounterResponse = {

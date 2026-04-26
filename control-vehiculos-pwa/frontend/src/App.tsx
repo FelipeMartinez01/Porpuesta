@@ -13,6 +13,7 @@ import CarriersPage from "./pages/CarriersPage";
 import DirectDispatchPage from "./pages/DirectDispatchPage";
 import YardDispatchPage from "./pages/YardDispatchPage";
 import AlertsPage from "./pages/AlertsPage";
+import DashboardGeneralPage from "./pages/DashboardGeneralPage";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/dispatch-direct" element={<DirectDispatchPage />} />
           <Route path="/dispatch-yard" element={<YardDispatchPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
+          <Route path="/dashboard-general" element={<DashboardGeneralPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

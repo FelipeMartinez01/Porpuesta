@@ -3,6 +3,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.models.vehicle import Vehicle
+from app.services.vehicle_event_service import create_vehicle_event
 
 
 def read_file(file: UploadFile):
@@ -82,6 +83,22 @@ def import_vehicles(
             )
 
             db.add(vehicle)
+            db.flush()
+
+            create_vehicle_event(
+                db=db,
+                vehicle_id=vehicle.id,
+                event_type="CREATED",
+                description=f"Vehículo creado por carga masiva con VIN {vehicle.vin}",
+            )
+
+            create_vehicle_event(
+                db=db,
+                vehicle_id=vehicle.id,
+                event_type="SHIPMENT_ASSIGNED",
+                description=f"Vehículo asociado al BL ID {shipment_id} por carga masiva",
+            )
+
             created.append(vin)
 
         except Exception as e:

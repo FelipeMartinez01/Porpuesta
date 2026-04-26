@@ -20,15 +20,15 @@ def upload_vehicles(
 ):
     carrier = db.query(Carrier).filter(Carrier.id == carrier_id).first()
     if not carrier:
-      raise HTTPException(status_code=400, detail="carrier_id no existe")
+        raise HTTPException(status_code=400, detail="carrier_id no existe")
 
     sector = db.query(Sector).filter(Sector.id == sector_id).first()
     if not sector:
-      raise HTTPException(status_code=400, detail="sector_id no existe")
+        raise HTTPException(status_code=400, detail="sector_id no existe")
 
     shipment = db.query(Shipment).filter(Shipment.id == shipment_id).first()
     if not shipment:
-      raise HTTPException(status_code=400, detail="shipment_id no existe")
+        raise HTTPException(status_code=400, detail="shipment_id no existe")
 
     try:
         result = import_vehicles(
