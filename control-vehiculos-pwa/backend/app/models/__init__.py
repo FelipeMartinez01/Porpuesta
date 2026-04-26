@@ -4,6 +4,7 @@ from app.models.parking_slot import ParkingSlot
 from app.models.vehicle import Vehicle
 from app.models.vehicle_photo import VehiclePhoto
 from app.models.vehicle_event import VehicleEvent
+from app.models.shipment import Shipment
 from app.models.vessel import Vessel
 from app.models.voyage import Voyage
-from app.models.shipment import Shipment
+from app.models.user import User
