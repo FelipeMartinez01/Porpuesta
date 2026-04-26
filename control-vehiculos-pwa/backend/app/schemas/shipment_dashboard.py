@@ -8,6 +8,9 @@ class ShipmentDashboardResponse(BaseModel):
     origin: str | None = None
 
     total_vehicles: int
+
     faltante: int
-    en_transito: int
-    recepcionado: int
+    directo: int
+    almacenado: int
+    en_transito: int = 0
+    despachado: int = 0

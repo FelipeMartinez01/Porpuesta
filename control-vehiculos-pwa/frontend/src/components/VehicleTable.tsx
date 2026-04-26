@@ -9,75 +9,35 @@ type Props = {
 
 function getStatusStyle(status: string): React.CSSProperties {
   if (status === "FALTANTE") {
-    return {
-      background: "#fee2e2",
-      color: "#991b1b",
-      padding: "6px 10px",
-      borderRadius: "999px",
-      fontWeight: 700,
-      fontSize: "12px",
-      display: "inline-block",
-    };
+    return { background: "#fee2e2", color: "#991b1b", ...baseStyle };
   }
 
   if (status === "DIRECTO") {
-    return {
-      background: "#dbeafe",
-      color: "#1e40af",
-      padding: "6px 10px",
-      borderRadius: "999px",
-      fontWeight: 700,
-      fontSize: "12px",
-      display: "inline-block",
-    };
+    return { background: "#dbeafe", color: "#1e40af", ...baseStyle };
   }
 
   if (status === "ALMACENADO") {
-    return {
-      background: "#fef3c7",
-      color: "#92400e",
-      padding: "6px 10px",
-      borderRadius: "999px",
-      fontWeight: 700,
-      fontSize: "12px",
-      display: "inline-block",
-    };
+    return { background: "#fef3c7", color: "#92400e", ...baseStyle };
   }
 
   if (status === "EN_TRANSITO") {
-    return {
-      background: "#ede9fe",
-      color: "#5b21b6",
-      padding: "6px 10px",
-      borderRadius: "999px",
-      fontWeight: 700,
-      fontSize: "12px",
-      display: "inline-block",
-    };
+    return { background: "#ede9fe", color: "#5b21b6", ...baseStyle };
   }
 
   if (status === "DESPACHADO") {
-    return {
-      background: "#dcfce7",
-      color: "#166534",
-      padding: "6px 10px",
-      borderRadius: "999px",
-      fontWeight: 700,
-      fontSize: "12px",
-      display: "inline-block",
-    };
+    return { background: "#dcfce7", color: "#166534", ...baseStyle };
   }
 
-  return {
-    background: "#f3f4f6",
-    color: "#374151",
-    padding: "6px 10px",
-    borderRadius: "999px",
-    fontWeight: 700,
-    fontSize: "12px",
-    display: "inline-block",
-  };
+  return { background: "#f3f4f6", color: "#374151", ...baseStyle };
 }
+
+const baseStyle: React.CSSProperties = {
+  padding: "6px 10px",
+  borderRadius: "999px",
+  fontWeight: 700,
+  fontSize: "12px",
+  display: "inline-block",
+};
 
 export default function VehicleTable({
   vehicles,
@@ -85,6 +45,12 @@ export default function VehicleTable({
   onEditVehicle,
   onDeleteVehicle,
 }: Props) {
+  const handleDelete = (id: number) => {
+    if (confirm("¿Seguro que quieres eliminar este vehículo?")) {
+      onDeleteVehicle(id);
+    }
+  };
+
   return (
     <div style={styles.wrapper}>
       <div style={{ overflowX: "auto" }}>
@@ -146,11 +112,7 @@ export default function VehicleTable({
 
                       <button
                         style={styles.deleteButton}
-                        onClick={() => {
-                          if (confirm("¿Eliminar este vehículo?")) {
-                            onDeleteVehicle(vehicle.id);
-                          }
-                        }}
+                        onClick={() => handleDelete(vehicle.id)}
                       >
                         Eliminar
                       </button>
@@ -177,19 +139,17 @@ const styles: Record<string, React.CSSProperties> = {
   table: {
     width: "100%",
     borderCollapse: "collapse",
-    background: "#fff",
   },
   th: {
     borderBottom: "1px solid #e5e5e5",
     padding: "14px 12px",
-    textAlign: "left",
     background: "#f9fafb",
     fontSize: "13px",
+    textAlign: "left",
   },
   td: {
     borderBottom: "1px solid #f0f0f0",
     padding: "12px",
-    verticalAlign: "top",
     fontSize: "14px",
   },
   emptyCell: {
@@ -199,33 +159,30 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actions: {
     display: "flex",
-    gap: "8px",
+    gap: "6px",
     flexWrap: "wrap",
   },
   viewButton: {
-    padding: "8px 12px",
-    borderRadius: "8px",
+    padding: "6px 10px",
+    borderRadius: "6px",
     border: "1px solid #d1d5db",
     background: "#fff",
     cursor: "pointer",
-    fontWeight: 600,
   },
   editButton: {
-    padding: "8px 12px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#2563eb",
-    color: "#fff",
+    padding: "6px 10px",
+    borderRadius: "6px",
+    border: "1px solid #93c5fd",
+    background: "#eff6ff",
+    color: "#1e40af",
     cursor: "pointer",
-    fontWeight: 600,
   },
   deleteButton: {
-    padding: "8px 12px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#dc2626",
-    color: "#fff",
+    padding: "6px 10px",
+    borderRadius: "6px",
+    border: "1px solid #fecaca",
+    background: "#fef2f2",
+    color: "#991b1b",
     cursor: "pointer",
-    fontWeight: 600,
   },
 };

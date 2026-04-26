@@ -5,6 +5,7 @@ import VehicleFilters from "../components/VehicleFilters";
 import VehicleTable from "../components/VehicleTable";
 import VehicleDetailCard from "../components/VehicleDetailCard";
 import VehicleCreateForm from "../components/VehicleCreateForm";
+import VehicleEditModal from "../components/VehicleEditModal";
 import type { Vehicle } from "../types/vehicle";
 import type { Carrier, Sector } from "../types/catalogs";
 
@@ -13,6 +14,8 @@ export default function VehiclesPage() {
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,13 +62,10 @@ export default function VehiclesPage() {
     }
   };
 
-  // 🔥 EDITAR (simple por ahora → luego lo mejoramos a modal)
   const handleEditVehicle = (vehicle: Vehicle) => {
-    setSelectedVehicle(vehicle);
-    alert("Aquí luego abriremos el modal de edición");
+    setEditingVehicle(vehicle);
   };
 
-  // 🔥 ELIMINAR
   const handleDeleteVehicle = async (vehicleId: number) => {
     try {
       await api.delete(`/vehicles/${vehicleId}`);
@@ -111,9 +111,7 @@ export default function VehiclesPage() {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>Visualización de Vehículos</h1>
-          <p style={styles.subtitle}>
-            Consulta y gestiona los vehículos.
-          </p>
+          <p style={styles.subtitle}>Consulta y gestiona los vehículos.</p>
         </div>
 
         <div style={styles.headerActions}>
@@ -130,7 +128,7 @@ export default function VehiclesPage() {
         </div>
       </div>
 
-      {createOpen && (
+      {createOpen ? (
         <VehicleCreateForm
           carriers={carriers}
           sectors={sectors}
@@ -140,7 +138,7 @@ export default function VehiclesPage() {
           }}
           onCancel={() => setCreateOpen(false)}
         />
-      )}
+      ) : null}
 
       <VehicleFilters
         vin={vin}
@@ -157,7 +155,7 @@ export default function VehiclesPage() {
         onClear={handleClear}
       />
 
-      {loading && <p style={styles.loading}>Cargando vehículos...</p>}
+      {loading ? <p style={styles.loading}>Cargando vehículos...</p> : null}
 
       <div style={styles.layout}>
         <div style={styles.tableArea}>
@@ -173,6 +171,21 @@ export default function VehiclesPage() {
           <VehicleDetailCard vehicle={selectedVehicle} />
         </div>
       </div>
+
+      <VehicleEditModal
+        vehicle={editingVehicle}
+        carriers={carriers}
+        sectors={sectors}
+        onClose={() => setEditingVehicle(null)}
+        onUpdated={async () => {
+          await fetchVehicles();
+
+          if (editingVehicle) {
+            const updated = await api.get<Vehicle>(`/vehicles/${editingVehicle.id}`);
+            setSelectedVehicle(updated.data);
+          }
+        }}
+      />
     </div>
   );
 }

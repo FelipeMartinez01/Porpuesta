@@ -26,9 +26,6 @@ def build_shipment_response(shipment: Shipment) -> ShipmentResponse:
     )
 
 
-# -----------------------------
-# CREATE
-# -----------------------------
 @router.post("/", response_model=ShipmentResponse, status_code=status.HTTP_201_CREATED)
 def create_shipment(payload: ShipmentCreate, db: Session = Depends(get_db)):
     existing = db.query(Shipment).filter(Shipment.bl_number == payload.bl_number).first()
@@ -54,9 +51,6 @@ def create_shipment(payload: ShipmentCreate, db: Session = Depends(get_db)):
     return build_shipment_response(shipment)
 
 
-# -----------------------------
-# LIST
-# -----------------------------
 @router.get("/", response_model=list[ShipmentResponse])
 def list_shipments(
     voyage_id: int | None = Query(default=None),
@@ -73,9 +67,6 @@ def list_shipments(
     return [build_shipment_response(shipment) for shipment in shipments]
 
 
-# -----------------------------
-# 🔥 DASHBOARD (FIXED)
-# -----------------------------
 @router.get("/dashboard/summary", response_model=list[ShipmentDashboardResponse])
 def shipment_dashboard(db: Session = Depends(get_db)):
     rows = (
@@ -86,10 +77,14 @@ def shipment_dashboard(db: Session = Depends(get_db)):
             Voyage.voyage_number.label("voyage_number"),
             Voyage.origin.label("origin"),
             Voyage.arrival_date.label("arrival_date"),
+
             func.count(Vehicle.id).label("total_vehicles"),
+
             func.sum(case((Vehicle.status == "FALTANTE", 1), else_=0)).label("faltante"),
+            func.sum(case((Vehicle.status == "DIRECTO", 1), else_=0)).label("directo"),
+            func.sum(case((Vehicle.status == "ALMACENADO", 1), else_=0)).label("almacenado"),
             func.sum(case((Vehicle.status == "EN_TRANSITO", 1), else_=0)).label("en_transito"),
-            func.sum(case((Vehicle.status == "RECEPCIONADO", 1), else_=0)).label("recepcionado"),
+            func.sum(case((Vehicle.status == "DESPACHADO", 1), else_=0)).label("despachado"),
         )
         .outerjoin(Voyage, Shipment.voyage_id == Voyage.id)
         .outerjoin(Vessel, Voyage.vessel_id == Vessel.id)
@@ -114,16 +109,15 @@ def shipment_dashboard(db: Session = Depends(get_db)):
             origin=row.origin,
             total_vehicles=row.total_vehicles or 0,
             faltante=row.faltante or 0,
+            directo=row.directo or 0,
+            almacenado=row.almacenado or 0,
             en_transito=row.en_transito or 0,
-            recepcionado=row.recepcionado or 0,
+            despachado=row.despachado or 0,
         )
         for row in rows
     ]
 
 
-# -----------------------------
-# GET ONE
-# -----------------------------
 @router.get("/{shipment_id}", response_model=ShipmentResponse)
 def get_shipment(shipment_id: int, db: Session = Depends(get_db)):
     shipment = (
@@ -139,9 +133,6 @@ def get_shipment(shipment_id: int, db: Session = Depends(get_db)):
     return build_shipment_response(shipment)
 
 
-# -----------------------------
-# UPDATE
-# -----------------------------
 @router.put("/{shipment_id}", response_model=ShipmentResponse)
 def update_shipment(
     shipment_id: int,
@@ -187,9 +178,6 @@ def update_shipment(
     return build_shipment_response(shipment)
 
 
-# -----------------------------
-# DELETE
-# -----------------------------
 @router.delete("/{shipment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_shipment(shipment_id: int, db: Session = Depends(get_db)):
     shipment = db.query(Shipment).filter(Shipment.id == shipment_id).first()

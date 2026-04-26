@@ -25,7 +25,7 @@ export default function ShipmentDashboardPage() {
 
   const getPercent = (item: ShipmentDashboard) => {
     if (item.total_vehicles === 0) return 0;
-    return Math.round((item.recepcionado / item.total_vehicles) * 100);
+    return Math.round((item.despachado / item.total_vehicles) * 100);
   };
 
   return (
@@ -34,7 +34,7 @@ export default function ShipmentDashboardPage() {
         <div>
           <h1 style={styles.title}>Dashboard por BL</h1>
           <p style={styles.subtitle}>
-            Control de avance por embarque, faltantes, tránsito y recepcionados.
+            Control de avance por embarque, directo, almacenado, tránsito y despachado.
           </p>
         </div>
 
@@ -78,13 +78,23 @@ export default function ShipmentDashboardPage() {
                 </div>
 
                 <div style={styles.statBox}>
+                  <strong>{item.directo}</strong>
+                  <span>Directo</span>
+                </div>
+
+                <div style={styles.statBox}>
+                  <strong>{item.almacenado}</strong>
+                  <span>Almacenado</span>
+                </div>
+
+                <div style={styles.statBox}>
                   <strong>{item.en_transito}</strong>
                   <span>En tránsito</span>
                 </div>
 
                 <div style={styles.statBox}>
-                  <strong>{item.recepcionado}</strong>
-                  <span>Recepcionados</span>
+                  <strong>{item.despachado}</strong>
+                  <span>Despachado</span>
                 </div>
               </div>
             </div>
@@ -177,7 +187,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   stats: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
     gap: "10px",
   },
   statBox: {

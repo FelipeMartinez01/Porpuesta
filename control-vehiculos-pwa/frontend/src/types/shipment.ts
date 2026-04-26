@@ -1,6 +1,7 @@
 export type Vessel = {
   id: number;
   name: string;
+  imo?: string | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -36,8 +37,12 @@ export type ShipmentDashboard = {
   bl_number: string;
   vessel_name?: string | null;
   origin?: string | null;
+
   total_vehicles: number;
+
   faltante: number;
+  directo: number;
+  almacenado: number;
   en_transito: number;
-  recepcionado: number;
+  despachado: number;
 };
