@@ -13,6 +13,8 @@ def create_vehicle_event(
         event_type=event_type,
         description=description,
     )
+
     db.add(event)
     db.flush()
+
     return event

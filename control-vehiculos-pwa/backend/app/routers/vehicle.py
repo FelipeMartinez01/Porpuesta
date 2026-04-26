@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
+
 from app.core.database import get_db
 from app.models.vehicle import Vehicle
 from app.models.carrier import Carrier
@@ -19,6 +20,7 @@ from app.services.vehicle_event_service import create_vehicle_event
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
+
 ALLOWED_TRANSITIONS = {
     "FALTANTE": {"DIRECTO", "ALMACENADO"},
     "DIRECTO": {"DESPACHADO"},
@@ -27,6 +29,7 @@ ALLOWED_TRANSITIONS = {
     "DESPACHADO": set(),
 }
 
+
 def validate_relations(
     db: Session,
     carrier_id: int | None,
@@ -34,17 +37,25 @@ def validate_relations(
     slot_id: int | None,
     shipment_id: int | None = None,
 ):
-    if carrier_id is not None and not db.query(Carrier).filter(Carrier.id == carrier_id).first():
-        raise HTTPException(status_code=400, detail="carrier_id no existe")
+    if carrier_id is not None:
+        carrier = db.query(Carrier).filter(Carrier.id == carrier_id).first()
+        if not carrier:
+            raise HTTPException(status_code=400, detail="carrier_id no existe")
 
-    if sector_id is not None and not db.query(Sector).filter(Sector.id == sector_id).first():
-        raise HTTPException(status_code=400, detail="sector_id no existe")
+    if sector_id is not None:
+        sector = db.query(Sector).filter(Sector.id == sector_id).first()
+        if not sector:
+            raise HTTPException(status_code=400, detail="sector_id no existe")
 
-    if slot_id is not None and not db.query(ParkingSlot).filter(ParkingSlot.id == slot_id).first():
-        raise HTTPException(status_code=400, detail="slot_id no existe")
+    if slot_id is not None:
+        slot = db.query(ParkingSlot).filter(ParkingSlot.id == slot_id).first()
+        if not slot:
+            raise HTTPException(status_code=400, detail="slot_id no existe")
 
-    if shipment_id is not None and not db.query(Shipment).filter(Shipment.id == shipment_id).first():
-        raise HTTPException(status_code=400, detail="shipment_id no existe")
+    if shipment_id is not None:
+        shipment = db.query(Shipment).filter(Shipment.id == shipment_id).first()
+        if not shipment:
+            raise HTTPException(status_code=400, detail="shipment_id no existe")
 
 
 def build_vehicle_response(vehicle: Vehicle) -> VehicleResponse:
@@ -69,6 +80,43 @@ def build_vehicle_response(vehicle: Vehicle) -> VehicleResponse:
         carrier_name=vehicle.carrier.name if vehicle.carrier else None,
         sector_name=vehicle.sector.name if vehicle.sector else None,
     )
+
+
+def reload_vehicle(db: Session, vehicle_id: int) -> Vehicle:
+    vehicle = (
+        db.query(Vehicle)
+        .options(
+            joinedload(Vehicle.carrier),
+            joinedload(Vehicle.sector),
+            joinedload(Vehicle.shipment),
+        )
+        .filter(Vehicle.id == vehicle_id)
+        .first()
+    )
+
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+
+    return vehicle
+
+
+def release_vehicle_slot_if_needed(db: Session, vehicle: Vehicle):
+    if vehicle.slot_id is None:
+        return
+
+    old_slot = db.query(ParkingSlot).filter(ParkingSlot.id == vehicle.slot_id).first()
+
+    if old_slot:
+        old_slot.visual_status = "DISPONIBLE"
+
+        create_vehicle_event(
+            db=db,
+            vehicle_id=vehicle.id,
+            event_type="SLOT_RELEASED",
+            description=f"Slot {old_slot.code} liberado",
+        )
+
+    vehicle.slot_id = None
 
 
 @router.post("/", response_model=VehicleResponse, status_code=status.HTTP_201_CREATED)
@@ -99,20 +147,17 @@ def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)):
         description=f"Vehículo creado con VIN {vehicle.vin}",
     )
 
-    db.commit()
-    db.refresh(vehicle)
-
-    vehicle = (
-        db.query(Vehicle)
-        .options(
-            joinedload(Vehicle.carrier),
-            joinedload(Vehicle.sector),
-            joinedload(Vehicle.shipment),
+    if vehicle.shipment_id:
+        create_vehicle_event(
+            db=db,
+            vehicle_id=vehicle.id,
+            event_type="SHIPMENT_ASSIGNED",
+            description=f"Vehículo asociado al BL ID {vehicle.shipment_id}",
         )
-        .filter(Vehicle.id == vehicle.id)
-        .first()
-    )
 
+    db.commit()
+
+    vehicle = reload_vehicle(db, vehicle.id)
     return build_vehicle_response(vehicle)
 
 
@@ -150,8 +195,8 @@ def list_vehicles(
     return [build_vehicle_response(vehicle) for vehicle in vehicles]
 
 
-@router.get("/{vehicle_id}", response_model=VehicleResponse)
-def get_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
+@router.get("/by-slot/{slot_id}", response_model=VehicleResponse)
+def get_vehicle_by_slot(slot_id: int, db: Session = Depends(get_db)):
     vehicle = (
         db.query(Vehicle)
         .options(
@@ -159,13 +204,19 @@ def get_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
             joinedload(Vehicle.sector),
             joinedload(Vehicle.shipment),
         )
-        .filter(Vehicle.id == vehicle_id)
+        .filter(Vehicle.slot_id == slot_id)
         .first()
     )
 
     if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+        raise HTTPException(status_code=404, detail="No hay vehículo en este slot")
 
+    return build_vehicle_response(vehicle)
+
+
+@router.get("/{vehicle_id}", response_model=VehicleResponse)
+def get_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
+    vehicle = reload_vehicle(db, vehicle_id)
     return build_vehicle_response(vehicle)
 
 
@@ -175,6 +226,7 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
 
+    old_shipment_id = vehicle.shipment_id
     update_data = payload.model_dump(exclude_unset=True)
 
     if "vin" in update_data:
@@ -183,8 +235,10 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
             .filter(Vehicle.vin == update_data["vin"], Vehicle.id != vehicle_id)
             .first()
         )
+
         if existing:
             raise HTTPException(status_code=400, detail="Ya existe otro vehículo con ese VIN")
+
         update_data["barcode_id"] = update_data["vin"]
 
     validate_relations(
@@ -201,30 +255,30 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
     create_vehicle_event(
         db=db,
         vehicle_id=vehicle.id,
-        event_type="RECEIVED",
+        event_type="UPDATED",
         description="Datos del vehículo actualizados",
     )
 
-    db.commit()
-    db.refresh(vehicle)
-
-    vehicle = (
-        db.query(Vehicle)
-        .options(
-            joinedload(Vehicle.carrier),
-            joinedload(Vehicle.sector),
-            joinedload(Vehicle.shipment),
+    if "shipment_id" in update_data and old_shipment_id != vehicle.shipment_id:
+        create_vehicle_event(
+            db=db,
+            vehicle_id=vehicle.id,
+            event_type="SHIPMENT_CHANGED",
+            description=f"BL cambiado de {old_shipment_id or '-'} a {vehicle.shipment_id or '-'}",
         )
-        .filter(Vehicle.id == vehicle.id)
-        .first()
-    )
 
+    db.commit()
+
+    vehicle = reload_vehicle(db, vehicle.id)
     return build_vehicle_response(vehicle)
 
 
 @router.patch("/{vehicle_id}/status", response_model=VehicleResponse)
-def update_vehicle_status(vehicle_id: int, payload: VehicleStatusUpdate, db: Session = Depends(get_db)):
-
+def update_vehicle_status(
+    vehicle_id: int,
+    payload: VehicleStatusUpdate,
+    db: Session = Depends(get_db),
+):
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
@@ -232,36 +286,49 @@ def update_vehicle_status(vehicle_id: int, payload: VehicleStatusUpdate, db: Ses
     current_status = vehicle.status
     new_status = payload.status
 
-    # 🔥 validar transición real
     if new_status not in ALLOWED_TRANSITIONS.get(current_status, set()):
         raise HTTPException(
             status_code=400,
-            detail=f"Transición inválida: {current_status} → {new_status}"
+            detail=f"Transición inválida: {current_status} → {new_status}",
         )
 
+    if new_status == "EN_TRANSITO":
+        release_vehicle_slot_if_needed(db, vehicle)
+
+    if new_status == "DESPACHADO":
+        release_vehicle_slot_if_needed(db, vehicle)
+
     vehicle.status = new_status
+
+    event_type = "STATUS_CHANGED"
+    description = f"{current_status} → {new_status}"
+
+    if new_status == "DIRECTO":
+        event_type = "DIRECT_FLOW"
+        description = "Vehículo marcado como DIRECTO"
+
+    if new_status == "ALMACENADO":
+        event_type = "STORED_FLOW"
+        description = "Vehículo marcado como ALMACENADO"
+
+    if new_status == "EN_TRANSITO":
+        event_type = "IN_TRANSIT"
+        description = "Vehículo marcado EN_TRANSITO"
+
+    if new_status == "DESPACHADO":
+        event_type = "DISPATCHED"
+        description = "Vehículo despachado"
 
     create_vehicle_event(
         db=db,
         vehicle_id=vehicle.id,
-        event_type="STATUS_CHANGED",
-        description=f"{current_status} → {new_status}",
+        event_type=event_type,
+        description=description,
     )
 
     db.commit()
-    db.refresh(vehicle)
 
-    vehicle = (
-        db.query(Vehicle)
-        .options(
-            joinedload(Vehicle.carrier),
-            joinedload(Vehicle.sector),
-            joinedload(Vehicle.shipment),
-        )
-        .filter(Vehicle.id == vehicle.id)
-        .first()
-    )
-
+    vehicle = reload_vehicle(db, vehicle.id)
     return build_vehicle_response(vehicle)
 
 
@@ -283,10 +350,20 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
     if occupied:
         raise HTTPException(status_code=400, detail="Ese slot ya está ocupado por otro vehículo")
 
+    if slot.visual_status == "OCUPADO":
+        raise HTTPException(status_code=400, detail="Ese slot está marcado como ocupado")
+
     if vehicle.slot_id:
         old_slot = db.query(ParkingSlot).filter(ParkingSlot.id == vehicle.slot_id).first()
         if old_slot:
             old_slot.visual_status = "DISPONIBLE"
+
+            create_vehicle_event(
+                db=db,
+                vehicle_id=vehicle.id,
+                event_type="SLOT_RELEASED",
+                description=f"Slot anterior {old_slot.code} liberado",
+            )
 
     vehicle.slot_id = payload.slot_id
     vehicle.status = "ALMACENADO"
@@ -300,19 +377,8 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
     )
 
     db.commit()
-    db.refresh(vehicle)
 
-    vehicle = (
-        db.query(Vehicle)
-        .options(
-            joinedload(Vehicle.carrier),
-            joinedload(Vehicle.sector),
-            joinedload(Vehicle.shipment),
-        )
-        .filter(Vehicle.id == vehicle.id)
-        .first()
-    )
-
+    vehicle = reload_vehicle(db, vehicle.id)
     return build_vehicle_response(vehicle)
 
 
@@ -322,28 +388,12 @@ def delete_vehicle(vehicle_id: int, db: Session = Depends(get_db)):
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
 
+    release_vehicle_slot_if_needed(db, vehicle)
+
     db.delete(vehicle)
     db.commit()
+
     return None
-
-
-@router.get("/by-slot/{slot_id}", response_model=VehicleResponse)
-def get_vehicle_by_slot(slot_id: int, db: Session = Depends(get_db)):
-    vehicle = (
-        db.query(Vehicle)
-        .options(
-            joinedload(Vehicle.carrier),
-            joinedload(Vehicle.sector),
-            joinedload(Vehicle.shipment),
-        )
-        .filter(Vehicle.slot_id == slot_id)
-        .first()
-    )
-
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="No hay vehículo en este slot")
-
-    return build_vehicle_response(vehicle)
 
 
 @router.get("/{vehicle_id}/events", response_model=list[VehicleEventResponse])
