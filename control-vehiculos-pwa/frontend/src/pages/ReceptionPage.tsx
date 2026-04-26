@@ -11,7 +11,7 @@ import type { VehicleEvent } from "../types/vehicleEvent";
 function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
   return {
     vin: vehicle.vin ?? "",
-    bl: vehicle.bl ?? "",
+    bl: vehicle.shipment_bl ?? "",
     color: vehicle.color ?? "",
     brand: vehicle.brand ?? "",
     model: vehicle.model ?? "",
@@ -25,6 +25,7 @@ export default function ReceptionPage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [events, setEvents] = useState<VehicleEvent[]>([]);
   const [scannerOpen, setScannerOpen] = useState(false);
+
   const [formData, setFormData] = useState<ReceptionFormData>({
     vin: "",
     bl: "",
@@ -34,6 +35,7 @@ export default function ReceptionPage() {
     vehicle_year: "",
     notes: "",
   });
+
   const [loading, setLoading] = useState(false);
 
   const fetchVehicleEvents = async (vehicleId: number) => {
@@ -55,6 +57,14 @@ export default function ReceptionPage() {
       input?.focus();
       input?.select();
     }, 0);
+  };
+
+  const reloadVehicle = async (vehicleId: number) => {
+    const updated = await api.get<Vehicle>(`/vehicles/${vehicleId}`);
+    setVehicle(updated.data);
+    setFormData(mapVehicleToForm(updated.data));
+    setSearchValue(updated.data.vin);
+    await fetchVehicleEvents(updated.data.id);
   };
 
   const searchVehicle = async (vinValue: string) => {
@@ -136,7 +146,6 @@ export default function ReceptionPage() {
 
       await api.put(`/vehicles/${vehicle.id}`, {
         vin: formData.vin,
-        bl: formData.bl || null,
         color: formData.color || null,
         brand: formData.brand || null,
         model: formData.model || null,
@@ -144,11 +153,7 @@ export default function ReceptionPage() {
         notes: formData.notes || null,
       });
 
-      const updated = await api.get<Vehicle>(`/vehicles/${vehicle.id}`);
-      setVehicle(updated.data);
-      setFormData(mapVehicleToForm(updated.data));
-      setSearchValue(updated.data.vin);
-      await fetchVehicleEvents(updated.data.id);
+      await reloadVehicle(vehicle.id);
 
       alert("Vehículo actualizado correctamente");
       focusSearchInput();
@@ -160,7 +165,7 @@ export default function ReceptionPage() {
     }
   };
 
-  const handleMarkTransit = async () => {
+  const handleChangeStatus = async (newStatus: string) => {
     if (!vehicle) {
       alert("Primero debes buscar un vehículo");
       return;
@@ -171,7 +176,6 @@ export default function ReceptionPage() {
 
       await api.put(`/vehicles/${vehicle.id}`, {
         vin: formData.vin,
-        bl: formData.bl || null,
         color: formData.color || null,
         brand: formData.brand || null,
         model: formData.model || null,
@@ -180,20 +184,16 @@ export default function ReceptionPage() {
       });
 
       await api.patch(`/vehicles/${vehicle.id}/status`, {
-        status: "EN_TRANSITO",
+        status: newStatus,
       });
 
-      const updated = await api.get<Vehicle>(`/vehicles/${vehicle.id}`);
-      setVehicle(updated.data);
-      setFormData(mapVehicleToForm(updated.data));
-      setSearchValue(updated.data.vin);
-      await fetchVehicleEvents(updated.data.id);
+      await reloadVehicle(vehicle.id);
 
-      alert("Vehículo marcado como EN_TRANSITO");
+      alert(`Vehículo actualizado a ${newStatus}`);
       focusSearchInput();
     } catch (error) {
-      console.error("Error marcando en tránsito", error);
-      alert("No se pudo actualizar el estado");
+      console.error("Error cambiando estado", error);
+      alert("No se pudo actualizar el estado. Revisa si el flujo es válido.");
     } finally {
       setLoading(false);
     }
@@ -203,7 +203,7 @@ export default function ReceptionPage() {
     <div style={styles.page}>
       <h1 style={styles.title}>Recepción</h1>
       <p style={styles.subtitle}>
-        Escanea o ingresa el VIN, edita los datos del vehículo y márcalo en tránsito.
+        Escanea o ingresa el VIN, valida los datos y selecciona el flujo operativo.
       </p>
 
       <ReceptionSearch
@@ -230,16 +230,20 @@ export default function ReceptionPage() {
           <p><strong>Porteador:</strong> {vehicle.carrier_name ?? "-"}</p>
           <p><strong>Sector:</strong> {vehicle.sector_name ?? "-"}</p>
           <p><strong>Código de barra:</strong> {vehicle.vin}</p>
-          <p><strong>BL:</strong> {vehicle.bl ?? "-"}</p>
+          <p><strong>BL:</strong> {vehicle.shipment_bl ?? "-"}</p>
         </div>
       ) : null}
 
       {vehicle ? (
         <ReceptionForm
           formData={formData}
+          status={vehicle.status}
           onChange={handleChange}
           onSave={handleSave}
-          onMarkTransit={handleMarkTransit}
+          onMarkDirect={() => handleChangeStatus("DIRECTO")}
+          onMarkStored={() => handleChangeStatus("ALMACENADO")}
+          onMarkTransit={() => handleChangeStatus("EN_TRANSITO")}
+          onDispatch={() => handleChangeStatus("DESPACHADO")}
           loading={loading}
         />
       ) : null}

@@ -23,7 +23,7 @@ export default function ParkingMapPage() {
           params: { sector_id: Number(sectorId) },
         }),
         api.get<Vehicle[]>("/vehicles/", {
-          params: { status: "EN_TRANSITO" },
+          params: { status: "ALMACENADO" },
         }),
         api.get<Sector[]>("/sectors/"),
       ]);
@@ -32,7 +32,9 @@ export default function ParkingMapPage() {
       setVehicles(vehiclesResponse.data);
       setSectors(sectorsResponse.data);
 
-      const occupiedSlots = slotsResponse.data.filter((slot) => slot.visual_status === "OCUPADO");
+      const occupiedSlots = slotsResponse.data.filter(
+        (slot) => slot.visual_status === "OCUPADO"
+      );
 
       const slotVehicleEntries = await Promise.all(
         occupiedSlots.map(async (slot) => {
@@ -46,6 +48,7 @@ export default function ParkingMapPage() {
       );
 
       const slotVehicleMap: Record<number, SlotVehicleInfo> = {};
+
       slotVehicleEntries.forEach(([slotId, vehicle]) => {
         if (vehicle) {
           slotVehicleMap[slotId] = vehicle;
@@ -92,7 +95,7 @@ export default function ParkingMapPage() {
         slot_id: selectedSlot.id,
       });
 
-      alert("Ubicación asignada correctamente. Vehículo recepcionado.");
+      alert("Ubicación asignada correctamente.");
 
       setSelectedVehicleId("");
       setSelectedSlot(null);
@@ -101,6 +104,34 @@ export default function ParkingMapPage() {
     } catch (error) {
       console.error("Error asignando slot", error);
       alert("No se pudo asignar la ubicación");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetMap = async () => {
+    const confirmReset = confirm(
+      "¿Seguro que quieres limpiar todo el mapa? Esto dejará todos los slots disponibles y quitará la ubicación asignada a los vehículos."
+    );
+
+    if (!confirmReset) return;
+
+    try {
+      setLoading(true);
+
+      await api.post("/parking-slots/reset");
+
+      setSelectedVehicleId("");
+      setSelectedSlot(null);
+      setSelectedSlotVehicle(null);
+      setSlotVehicles({});
+
+      await fetchData(selectedSectorId);
+
+      alert("Mapa limpiado correctamente");
+    } catch (error) {
+      console.error("Error limpiando mapa", error);
+      alert("No se pudo limpiar el mapa. Revisa que exista el endpoint /parking-slots/reset");
     } finally {
       setLoading(false);
     }
@@ -125,7 +156,7 @@ export default function ParkingMapPage() {
     <div style={styles.page}>
       <h1 style={styles.title}>Mapa de Posiciones</h1>
       <p style={styles.subtitle}>
-        Selecciona un vehículo en tránsito y asígnale una ubicación física en el patio.
+        Selecciona un vehículo almacenado y asígnale una ubicación física en el patio.
       </p>
 
       <div style={styles.card}>
@@ -150,7 +181,7 @@ export default function ParkingMapPage() {
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Vehículo en tránsito</label>
+            <label style={styles.label}>Vehículo almacenado</label>
             <select
               style={styles.input}
               value={selectedVehicleId}
@@ -178,7 +209,11 @@ export default function ParkingMapPage() {
 
         <div style={styles.actions}>
           <button style={styles.button} onClick={handleAssign} disabled={loading}>
-            {loading ? "Asignando..." : "Asignar ubicación y recepcionar"}
+            {loading ? "Asignando..." : "Asignar ubicación"}
+          </button>
+
+          <button style={styles.dangerButton} onClick={handleResetMap} disabled={loading}>
+            Limpiar mapa
           </button>
         </div>
       </div>
@@ -186,13 +221,25 @@ export default function ParkingMapPage() {
       {selectedSlot && selectedSlot.visual_status === "OCUPADO" ? (
         <div style={styles.card}>
           <h3 style={styles.sectionTitle}>Detalle del slot ocupado</h3>
-          <p><strong>Slot:</strong> {selectedSlot.code}</p>
+          <p>
+            <strong>Slot:</strong> {selectedSlot.code}
+          </p>
+
           {selectedSlotVehicle ? (
             <>
-              <p><strong>VIN:</strong> {selectedSlotVehicle.vin}</p>
-              <p><strong>Estado:</strong> {selectedSlotVehicle.status}</p>
-              <p><strong>Porteador:</strong> {selectedSlotVehicle.carrier_name ?? "-"}</p>
-              <p><strong>Marca / Modelo:</strong> {selectedSlotVehicle.brand ?? "-"} {selectedSlotVehicle.model ?? ""}</p>
+              <p>
+                <strong>VIN:</strong> {selectedSlotVehicle.vin}
+              </p>
+              <p>
+                <strong>Estado:</strong> {selectedSlotVehicle.status}
+              </p>
+              <p>
+                <strong>Porteador:</strong> {selectedSlotVehicle.carrier_name ?? "-"}
+              </p>
+              <p>
+                <strong>Marca / Modelo:</strong> {selectedSlotVehicle.brand ?? "-"}{" "}
+                {selectedSlotVehicle.model ?? ""}
+              </p>
             </>
           ) : (
             <p>No se pudo cargar el detalle del vehículo.</p>
@@ -260,12 +307,24 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actions: {
     marginTop: "20px",
+    display: "flex",
+    gap: "12px",
+    flexWrap: "wrap",
   },
   button: {
     padding: "12px 18px",
     borderRadius: "10px",
     border: "none",
     background: "#111827",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  dangerButton: {
+    padding: "12px 18px",
+    borderRadius: "10px",
+    border: "none",
+    background: "#dc2626",
     color: "#fff",
     cursor: "pointer",
     fontWeight: 700,

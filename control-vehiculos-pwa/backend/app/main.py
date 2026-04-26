@@ -1,13 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
 from app.core.database import Base, engine
 from app.models import Carrier, Sector, ParkingSlot, Vehicle, VehiclePhoto, VehicleEvent, Shipment, Vessel, Voyage
+
 from app.routers.carrier import router as carrier_router
 from app.routers.sector import router as sector_router
 from app.routers.vehicle import router as vehicle_router
 from app.routers.upload import router as upload_router
-from app.routers.parking import router as parking_router
+from app.routers.parking_slot import router as parking_slot_router
 from app.routers.vehicle_photo import router as vehicle_photo_router
 from app.routers.shipment import router as shipment_router
 from app.routers.vessel import router as vessel_router
@@ -40,7 +42,7 @@ app.include_router(carrier_router)
 app.include_router(sector_router)
 app.include_router(vehicle_router)
 app.include_router(upload_router)
-app.include_router(parking_router)
+app.include_router(parking_slot_router)
 app.include_router(vehicle_photo_router)
 app.include_router(shipment_router)
 app.include_router(vessel_router)
