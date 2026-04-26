@@ -1,13 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { AlertsResponse, VehicleAlert, SlotAlert } from "../types/alerts";
+
+type AnyAlert = VehicleAlert | SlotAlert;
+
+function isVehicleAlert(item: AnyAlert): item is VehicleAlert {
+  return "vehicle_id" in item;
+}
+
+function getSeverityStyle(label: string): React.CSSProperties {
+  if (label === "CRITICA") return { background: "#fee2e2", color: "#991b1b", borderColor: "#fecaca" };
+  if (label === "ALTA") return { background: "#ffedd5", color: "#9a3412", borderColor: "#fed7aa" };
+  if (label === "MEDIA") return { background: "#fef3c7", color: "#92400e", borderColor: "#fde68a" };
+  return { background: "#dbeafe", color: "#1e40af", borderColor: "#bfdbfe" };
+}
 
 export default function AlertsPage() {
   const navigate = useNavigate();
 
   const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [severityFilter, setSeverityFilter] = useState("TODAS");
 
   const fetchAlerts = async () => {
     try {
@@ -25,6 +39,18 @@ export default function AlertsPage() {
   useEffect(() => {
     fetchAlerts();
   }, []);
+
+  const filteredAlerts = useMemo(() => {
+    const data = alerts?.all_alerts ?? [];
+
+    if (severityFilter === "TODAS") return data;
+
+    return data.filter((item) => item.severity.label === severityFilter);
+  }, [alerts, severityFilter]);
+
+  const goToVehicleHistory = (item: VehicleAlert) => {
+    navigate(`/vehicles/${item.vehicle_id}/history`);
+  };
 
   const goToMapWithVin = (item: VehicleAlert) => {
     navigate("/parking-map", {
@@ -67,10 +93,6 @@ export default function AlertsPage() {
     }
   };
 
-  const handleGoToVehicleHistory = (item: VehicleAlert) => {
-    navigate(`/vehicles/${item.vehicle_id}/history`);
-  };
-
   const handleCleanMap = async () => {
     const confirmClean = confirm(
       "¿Seguro que quieres limpiar inconsistencias del mapa? Esto dejará todos los slots disponibles y quitará asignaciones."
@@ -94,7 +116,7 @@ export default function AlertsPage() {
         <div>
           <h1 style={styles.title}>Alertas inteligentes</h1>
           <p style={styles.subtitle}>
-            Detección automática de posibles problemas operativos en el patio.
+            Priorización automática de riesgos operativos según severidad.
           </p>
         </div>
 
@@ -103,167 +125,136 @@ export default function AlertsPage() {
         </button>
       </div>
 
-      <div style={styles.kpiCard}>
-        <span>Total alertas activas</span>
-        <strong>{alerts?.total_alerts ?? 0}</strong>
+      <div style={styles.kpiGrid}>
+        <Kpi title="Total" value={alerts?.total_alerts ?? 0} background="#111827" color="#fff" />
+        <Kpi title="Críticas" value={alerts?.critical_alerts ?? 0} background="#991b1b" color="#fff" />
+        <Kpi title="Altas" value={alerts?.high_alerts ?? 0} background="#9a3412" color="#fff" />
+        <Kpi title="Medias" value={alerts?.medium_alerts ?? 0} background="#92400e" color="#fff" />
+        <Kpi title="Bajas" value={alerts?.low_alerts ?? 0} background="#1e40af" color="#fff" />
       </div>
 
-      <AlertSection
-        title="Vehículos en tránsito por más de 2 horas"
-        description="Posible demora o vehículo pendiente de ubicación."
-        items={alerts?.stuck_transit ?? []}
-        actions={(item) => (
-          <>
-            <button style={styles.smallButton} onClick={() => goToMapWithVin(item)}>
-              Ir al mapa
-            </button>
+      <div style={styles.filtersCard}>
+        <label style={styles.label}>Filtrar por severidad</label>
+        <select
+          style={styles.select}
+          value={severityFilter}
+          onChange={(e) => setSeverityFilter(e.target.value)}
+        >
+          <option value="TODAS">Todas</option>
+          <option value="CRITICA">Crítica</option>
+          <option value="ALTA">Alta</option>
+          <option value="MEDIA">Media</option>
+          <option value="BAJA">Baja</option>
+        </select>
+      </div>
 
-            <button
-              style={styles.secondarySmallButton}
-              onClick={() => handleGoToVehicleHistory(item)}
-            >
-              Ver historial
-            </button>
-          </>
-        )}
-      />
+      <div style={styles.card}>
+        <h2 style={styles.sectionTitle}>Alertas priorizadas</h2>
 
-      <AlertSection
-        title="Vehículos almacenados por más de 3 días"
-        description="Posible atraso logístico o unidad pendiente de despacho desde patio."
-        items={alerts?.long_storage ?? []}
-        actions={(item) => (
-          <>
-            <button style={styles.smallButton} onClick={() => goToYardDispatch(item)}>
-              Despacho patio
-            </button>
-
-            <button style={styles.secondarySmallButton} onClick={() => goToMapWithVin(item)}>
-              Ver en mapa
-            </button>
-          </>
-        )}
-      />
-
-      <AlertSection
-        title="Vehículos directos pendientes por más de 4 horas"
-        description="Vehículos que deberían ser despachados rápidamente."
-        items={alerts?.direct_pending ?? []}
-        actions={(item) => (
-          <>
-            <button
-              style={styles.successSmallButton}
-              onClick={() => handleDispatchDirect(item)}
-            >
-              Despachar ahora
-            </button>
-
-            <button style={styles.secondarySmallButton} onClick={() => goToDirectDispatch(item)}>
-              Ir a despacho
-            </button>
-          </>
-        )}
-      />
-
-      <SlotSection
-        title="Slots ocupados sin vehículo asociado"
-        description="Inconsistencia entre mapa y asignación real."
-        items={alerts?.slot_occupied_without_vehicle ?? []}
-        onCleanMap={handleCleanMap}
-      />
-    </div>
-  );
-}
-
-function AlertSection({
-  title,
-  description,
-  items,
-  actions,
-}: {
-  title: string;
-  description: string;
-  items: VehicleAlert[];
-  actions: (item: VehicleAlert) => React.ReactNode;
-}) {
-  return (
-    <div style={styles.card}>
-      <h2 style={styles.sectionTitle}>{title}</h2>
-      <p style={styles.sectionDescription}>{description}</p>
-
-      {items.length === 0 ? (
-        <div style={styles.empty}>Sin alertas.</div>
-      ) : (
-        <div style={styles.list}>
-          {items.map((item) => (
-            <div key={`${item.vehicle_id}-${item.status}`} style={styles.alertItem}>
-              <div style={styles.alertContent}>
-                <strong>{item.vin}</strong>
-                <p style={styles.meta}>
-                  {item.brand ?? "-"} {item.model ?? ""} · BL:{" "}
-                  {item.shipment_bl ?? "-"}
-                </p>
-                <p style={styles.meta}>
-                  Porteador: {item.carrier_name ?? "-"} · Sector:{" "}
-                  {item.sector_name ?? "-"} · Slot: {item.slot_id ?? "-"}
-                </p>
-              </div>
-
-              <div style={styles.rightActions}>
-                <div style={styles.badge}>{item.hours_in_current_state} h</div>
-                <div style={styles.actionGroup}>{actions(item)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SlotSection({
-  title,
-  description,
-  items,
-  onCleanMap,
-}: {
-  title: string;
-  description: string;
-  items: SlotAlert[];
-  onCleanMap: () => void;
-}) {
-  return (
-    <div style={styles.card}>
-      <h2 style={styles.sectionTitle}>{title}</h2>
-      <p style={styles.sectionDescription}>{description}</p>
-
-      {items.length === 0 ? (
-        <div style={styles.empty}>Sin inconsistencias.</div>
-      ) : (
-        <>
-          <div style={styles.actionsTop}>
-            <button style={styles.dangerButton} onClick={onCleanMap}>
-              Limpiar mapa
-            </button>
-          </div>
-
+        {filteredAlerts.length === 0 ? (
+          <div style={styles.empty}>Sin alertas para mostrar.</div>
+        ) : (
           <div style={styles.list}>
-            {items.map((item) => (
-              <div key={item.slot_id} style={styles.alertItem}>
-                <div>
-                  <strong>Slot {item.slot_code}</strong>
-                  <p style={styles.meta}>
-                    Sector ID: {item.sector_id ?? "-"} · Estado:{" "}
-                    {item.visual_status}
+            {filteredAlerts.map((item, index) => (
+              <div
+                key={`${item.alert_type}-${isVehicleAlert(item) ? item.vehicle_id : item.slot_id}-${index}`}
+                style={{
+                  ...styles.alertItem,
+                  ...getSeverityStyle(item.severity.label),
+                }}
+              >
+                <div style={styles.alertContent}>
+                  <div style={styles.alertTop}>
+                    <span
+                      style={{
+                        ...styles.severityBadge,
+                        ...getSeverityStyle(item.severity.label),
+                      }}
+                    >
+                      {item.severity.label}
+                    </span>
+
+                    <strong>{item.title}</strong>
+                  </div>
+
+                  <p style={styles.message}>{item.message}</p>
+                  <p style={styles.suggested}>
+                    Acción sugerida: <strong>{item.suggested_action}</strong>
                   </p>
+
+                  {isVehicleAlert(item) ? (
+                    <p style={styles.meta}>
+                      VIN: <strong>{item.vin}</strong> · Estado: {item.status} · BL:{" "}
+                      {item.shipment_bl ?? "-"} · Slot: {item.slot_id ?? "-"} ·{" "}
+                      {item.hours_in_current_state} h
+                    </p>
+                  ) : (
+                    <p style={styles.meta}>
+                      Slot: <strong>{item.slot_code}</strong> · Sector:{" "}
+                      {item.sector_id ?? "-"} · Estado: {item.visual_status}
+                    </p>
+                  )}
                 </div>
 
-                <div style={styles.badge}>Mapa</div>
+                <div style={styles.actionGroup}>
+                  {isVehicleAlert(item) ? (
+                    <>
+                      <button style={styles.smallButton} onClick={() => goToVehicleHistory(item)}>
+                        Historial
+                      </button>
+
+                      <button style={styles.secondarySmallButton} onClick={() => goToMapWithVin(item)}>
+                        Mapa
+                      </button>
+
+                      {item.alert_type === "DIRECT_PENDING" ? (
+                        <button style={styles.successSmallButton} onClick={() => handleDispatchDirect(item)}>
+                          Despachar
+                        </button>
+                      ) : null}
+
+                      {item.status === "ALMACENADO" ? (
+                        <button style={styles.secondarySmallButton} onClick={() => goToYardDispatch(item)}>
+                          Despacho patio
+                        </button>
+                      ) : null}
+
+                      {item.status === "DIRECTO" ? (
+                        <button style={styles.secondarySmallButton} onClick={() => goToDirectDispatch(item)}>
+                          Despacho directo
+                        </button>
+                      ) : null}
+                    </>
+                  ) : (
+                    <button style={styles.dangerButton} onClick={handleCleanMap}>
+                      Corregir mapa
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
-        </>
-      )}
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Kpi({
+  title,
+  value,
+  background,
+  color,
+}: {
+  title: string;
+  value: number;
+  background: string;
+  color: string;
+}) {
+  return (
+    <div style={{ ...styles.kpiCard, background, color }}>
+      <span>{title}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -300,16 +291,38 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     cursor: "pointer",
   },
-  kpiCard: {
-    background: "#111827",
-    color: "#fff",
-    borderRadius: "18px",
-    padding: "20px",
+  kpiGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: "14px",
     marginBottom: "20px",
+  },
+  kpiCard: {
+    borderRadius: "18px",
+    padding: "18px",
     display: "flex",
     flexDirection: "column",
     gap: "8px",
-    maxWidth: "280px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  },
+  filtersCard: {
+    background: "#fff",
+    borderRadius: "16px",
+    padding: "16px",
+    border: "1px solid #e5e7eb",
+    marginBottom: "20px",
+    display: "flex",
+    gap: "12px",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  label: {
+    fontWeight: 800,
+  },
+  select: {
+    padding: "10px 12px",
+    borderRadius: "10px",
+    border: "1px solid #d1d5db",
   },
   card: {
     background: "#fff",
@@ -321,11 +334,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sectionTitle: {
     margin: 0,
-    marginBottom: "6px",
-  },
-  sectionDescription: {
-    marginTop: 0,
-    color: "#6b7280",
+    marginBottom: "16px",
   },
   empty: {
     padding: "16px",
@@ -338,46 +347,53 @@ const styles: Record<string, React.CSSProperties> = {
   list: {
     display: "flex",
     flexDirection: "column",
-    gap: "10px",
+    gap: "12px",
   },
   alertItem: {
     display: "flex",
     justifyContent: "space-between",
-    gap: "12px",
+    gap: "14px",
     alignItems: "center",
-    padding: "14px",
-    borderRadius: "12px",
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
+    padding: "16px",
+    borderRadius: "14px",
+    border: "1px solid",
     flexWrap: "wrap",
   },
   alertContent: {
-    minWidth: "240px",
+    minWidth: "260px",
     flex: 1,
   },
-  meta: {
-    margin: "4px 0 0",
-    color: "#6b7280",
+  alertTop: {
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  severityBadge: {
+    border: "1px solid",
+    borderRadius: "999px",
+    padding: "5px 9px",
+    fontSize: "12px",
+    fontWeight: 900,
+  },
+  message: {
+    margin: "8px 0 0",
+  },
+  suggested: {
+    margin: "6px 0 0",
+    color: "#374151",
     fontSize: "13px",
   },
-  rightActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    flexWrap: "wrap",
+  meta: {
+    margin: "6px 0 0",
+    color: "#6b7280",
+    fontSize: "13px",
   },
   actionGroup: {
     display: "flex",
     gap: "8px",
     flexWrap: "wrap",
-  },
-  badge: {
-    background: "#991b1b",
-    color: "#fff",
-    borderRadius: "999px",
-    padding: "8px 10px",
-    fontWeight: 800,
-    whiteSpace: "nowrap",
+    justifyContent: "flex-end",
   },
   smallButton: {
     padding: "8px 10px",
@@ -407,15 +423,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
   },
   dangerButton: {
-    padding: "10px 14px",
-    borderRadius: "10px",
+    padding: "8px 10px",
+    borderRadius: "8px",
     border: "none",
     background: "#dc2626",
     color: "#fff",
     cursor: "pointer",
     fontWeight: 700,
-  },
-  actionsTop: {
-    marginBottom: "14px",
   },
 };
