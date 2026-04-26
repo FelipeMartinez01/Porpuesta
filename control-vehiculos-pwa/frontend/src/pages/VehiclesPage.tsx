@@ -59,21 +59,24 @@ export default function VehiclesPage() {
     }
   };
 
-  const handleChangeStatus = async (vehicleId: number, newStatus: string) => {
-    try {
-      await api.patch(`/vehicles/${vehicleId}/status`, {
-        status: newStatus,
-      });
+  // 🔥 EDITAR (simple por ahora → luego lo mejoramos a modal)
+  const handleEditVehicle = (vehicle: Vehicle) => {
+    setSelectedVehicle(vehicle);
+    alert("Aquí luego abriremos el modal de edición");
+  };
 
+  // 🔥 ELIMINAR
+  const handleDeleteVehicle = async (vehicleId: number) => {
+    try {
+      await api.delete(`/vehicles/${vehicleId}`);
       await fetchVehicles();
 
-      if (selectedVehicle && selectedVehicle.id === vehicleId) {
-        const updated = await api.get<Vehicle>(`/vehicles/${vehicleId}`);
-        setSelectedVehicle(updated.data);
+      if (selectedVehicle?.id === vehicleId) {
+        setSelectedVehicle(null);
       }
     } catch (error) {
-      console.error("Error cambiando estado", error);
-      alert("No se pudo cambiar el estado");
+      console.error("Error eliminando vehículo", error);
+      alert("No se pudo eliminar el vehículo");
     }
   };
 
@@ -109,7 +112,7 @@ export default function VehiclesPage() {
         <div>
           <h1 style={styles.title}>Visualización de Vehículos</h1>
           <p style={styles.subtitle}>
-            Consulta, filtra y actualiza el estado de los vehículos recepcionados.
+            Consulta y gestiona los vehículos.
           </p>
         </div>
 
@@ -127,7 +130,7 @@ export default function VehiclesPage() {
         </div>
       </div>
 
-      {createOpen ? (
+      {createOpen && (
         <VehicleCreateForm
           carriers={carriers}
           sectors={sectors}
@@ -137,7 +140,7 @@ export default function VehiclesPage() {
           }}
           onCancel={() => setCreateOpen(false)}
         />
-      ) : null}
+      )}
 
       <VehicleFilters
         vin={vin}
@@ -154,14 +157,15 @@ export default function VehiclesPage() {
         onClear={handleClear}
       />
 
-      {loading ? <p style={styles.loading}>Cargando vehículos...</p> : null}
+      {loading && <p style={styles.loading}>Cargando vehículos...</p>}
 
       <div style={styles.layout}>
         <div style={styles.tableArea}>
           <VehicleTable
             vehicles={vehicles}
             onSelectVehicle={setSelectedVehicle}
-            onChangeStatus={handleChangeStatus}
+            onEditVehicle={handleEditVehicle}
+            onDeleteVehicle={handleDeleteVehicle}
           />
         </div>
 

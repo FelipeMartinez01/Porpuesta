@@ -3,7 +3,8 @@ import type { Vehicle } from "../types/vehicle";
 type Props = {
   vehicles: Vehicle[];
   onSelectVehicle: (vehicle: Vehicle) => void;
-  onChangeStatus: (vehicleId: number, status: string) => void;
+  onEditVehicle: (vehicle: Vehicle) => void;
+  onDeleteVehicle: (vehicleId: number) => void;
 };
 
 function getStatusStyle(status: string): React.CSSProperties {
@@ -19,7 +20,19 @@ function getStatusStyle(status: string): React.CSSProperties {
     };
   }
 
-  if (status === "EN_TRANSITO") {
+  if (status === "DIRECTO") {
+    return {
+      background: "#dbeafe",
+      color: "#1e40af",
+      padding: "6px 10px",
+      borderRadius: "999px",
+      fontWeight: 700,
+      fontSize: "12px",
+      display: "inline-block",
+    };
+  }
+
+  if (status === "ALMACENADO") {
     return {
       background: "#fef3c7",
       color: "#92400e",
@@ -31,9 +44,33 @@ function getStatusStyle(status: string): React.CSSProperties {
     };
   }
 
+  if (status === "EN_TRANSITO") {
+    return {
+      background: "#ede9fe",
+      color: "#5b21b6",
+      padding: "6px 10px",
+      borderRadius: "999px",
+      fontWeight: 700,
+      fontSize: "12px",
+      display: "inline-block",
+    };
+  }
+
+  if (status === "DESPACHADO") {
+    return {
+      background: "#dcfce7",
+      color: "#166534",
+      padding: "6px 10px",
+      borderRadius: "999px",
+      fontWeight: 700,
+      fontSize: "12px",
+      display: "inline-block",
+    };
+  }
+
   return {
-    background: "#dcfce7",
-    color: "#166534",
+    background: "#f3f4f6",
+    color: "#374151",
     padding: "6px 10px",
     borderRadius: "999px",
     fontWeight: 700,
@@ -45,7 +82,8 @@ function getStatusStyle(status: string): React.CSSProperties {
 export default function VehicleTable({
   vehicles,
   onSelectVehicle,
-  onChangeStatus,
+  onEditVehicle,
+  onDeleteVehicle,
 }: Props) {
   return (
     <div style={styles.wrapper}>
@@ -80,35 +118,41 @@ export default function VehicleTable({
                   <td style={styles.td}>{vehicle.color ?? "-"}</td>
                   <td style={styles.td}>{vehicle.brand ?? "-"}</td>
                   <td style={styles.td}>{vehicle.model ?? "-"}</td>
+
                   <td style={styles.td}>
                     <span style={getStatusStyle(vehicle.status)}>
                       {vehicle.status}
                     </span>
                   </td>
+
                   <td style={styles.td}>{vehicle.carrier_name ?? "-"}</td>
                   <td style={styles.td}>{vehicle.sector_name ?? "-"}</td>
+
                   <td style={styles.td}>
                     <div style={styles.actions}>
-                      <button style={styles.infoButton} onClick={() => onSelectVehicle(vehicle)}>
+                      <button
+                        style={styles.viewButton}
+                        onClick={() => onSelectVehicle(vehicle)}
+                      >
                         Ver
                       </button>
+
                       <button
-                        style={styles.faltanteButton}
-                        onClick={() => onChangeStatus(vehicle.id, "FALTANTE")}
+                        style={styles.editButton}
+                        onClick={() => onEditVehicle(vehicle)}
                       >
-                        Faltante
+                        Editar
                       </button>
+
                       <button
-                        style={styles.transitoButton}
-                        onClick={() => onChangeStatus(vehicle.id, "EN_TRANSITO")}
+                        style={styles.deleteButton}
+                        onClick={() => {
+                          if (confirm("¿Eliminar este vehículo?")) {
+                            onDeleteVehicle(vehicle.id);
+                          }
+                        }}
                       >
-                        Tránsito
-                      </button>
-                      <button
-                        style={styles.okButton}
-                        onClick={() => onChangeStatus(vehicle.id, "RECEPCIONADO")}
-                      >
-                        Recepcionado
+                        Eliminar
                       </button>
                     </div>
                   </td>
@@ -158,23 +202,30 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "8px",
     flexWrap: "wrap",
   },
-  infoButton: {
+  viewButton: {
+    padding: "8px 12px",
+    borderRadius: "8px",
     border: "1px solid #d1d5db",
     background: "#fff",
+    cursor: "pointer",
+    fontWeight: 600,
   },
-  faltanteButton: {
-    border: "1px solid #fecaca",
-    background: "#fef2f2",
-    color: "#991b1b",
+  editButton: {
+    padding: "8px 12px",
+    borderRadius: "8px",
+    border: "none",
+    background: "#2563eb",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 600,
   },
-  transitoButton: {
-    border: "1px solid #fde68a",
-    background: "#fffbeb",
-    color: "#92400e",
-  },
-  okButton: {
-    border: "1px solid #bbf7d0",
-    background: "#f0fdf4",
-    color: "#166534",
+  deleteButton: {
+    padding: "8px 12px",
+    borderRadius: "8px",
+    border: "none",
+    background: "#dc2626",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 600,
   },
 };

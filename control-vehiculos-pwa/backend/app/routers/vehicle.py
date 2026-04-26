@@ -19,6 +19,13 @@ from app.services.vehicle_event_service import create_vehicle_event
 
 router = APIRouter(prefix="/vehicles", tags=["Vehicles"])
 
+ALLOWED_TRANSITIONS = {
+    "FALTANTE": {"DIRECTO", "ALMACENADO"},
+    "DIRECTO": {"DESPACHADO"},
+    "ALMACENADO": {"EN_TRANSITO"},
+    "EN_TRANSITO": {"DESPACHADO"},
+    "DESPACHADO": set(),
+}
 
 def validate_relations(
     db: Session,
@@ -217,22 +224,28 @@ def update_vehicle(vehicle_id: int, payload: VehicleUpdate, db: Session = Depend
 
 @router.patch("/{vehicle_id}/status", response_model=VehicleResponse)
 def update_vehicle_status(vehicle_id: int, payload: VehicleStatusUpdate, db: Session = Depends(get_db)):
-    valid_statuses = {"FALTANTE", "EN_TRANSITO", "RECEPCIONADO"}
-
-    if payload.status not in valid_statuses:
-        raise HTTPException(status_code=400, detail="Estado no válido")
 
     vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
     if not vehicle:
         raise HTTPException(status_code=404, detail="Vehículo no encontrado")
 
-    vehicle.status = payload.status
+    current_status = vehicle.status
+    new_status = payload.status
+
+    # 🔥 validar transición real
+    if new_status not in ALLOWED_TRANSITIONS.get(current_status, set()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Transición inválida: {current_status} → {new_status}"
+        )
+
+    vehicle.status = new_status
 
     create_vehicle_event(
         db=db,
         vehicle_id=vehicle.id,
         event_type="STATUS_CHANGED",
-        description=f"Estado cambiado a {payload.status}",
+        description=f"{current_status} → {new_status}",
     )
 
     db.commit()
@@ -276,7 +289,7 @@ def assign_slot(vehicle_id: int, payload: VehicleAssignSlot, db: Session = Depen
             old_slot.visual_status = "DISPONIBLE"
 
     vehicle.slot_id = payload.slot_id
-    vehicle.status = "RECEPCIONADO"
+    vehicle.status = "ALMACENADO"
     slot.visual_status = "OCUPADO"
 
     create_vehicle_event(
