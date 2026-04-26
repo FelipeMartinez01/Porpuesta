@@ -10,6 +10,8 @@ import ShipmentDashboardPage from "./pages/ShipmentDashboardPage";
 import ShipmentDetailPage from "./pages/ShipmentDetailPage";
 import LogisticsPage from "./pages/LogisticsPage";
 import CarriersPage from "./pages/CarriersPage";
+import DirectDispatchPage from "./pages/DirectDispatchPage";
+import YardDispatchPage from "./pages/YardDispatchPage";
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
           <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage />} />
           <Route path="/logistics" element={<LogisticsPage />} />
           <Route path="/carriers" element={<CarriersPage />} />
+          <Route path="/dispatch-direct" element={<DirectDispatchPage />} />
+          <Route path="/dispatch-yard" element={<YardDispatchPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

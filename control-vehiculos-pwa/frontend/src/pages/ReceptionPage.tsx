@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import ReceptionSearch from "../components/ReceptionSearch";
 import ReceptionForm from "../components/ReceptionForm";
@@ -7,6 +7,8 @@ import VehicleTimeline from "../components/VehicleTimeLine";
 import type { Vehicle } from "../types/vehicle";
 import type { ReceptionFormData } from "../types/reception";
 import type { VehicleEvent } from "../types/vehicleEvent";
+
+type ReceptionFilter = "FALTANTE" | "DIRECTO" | "ALMACENADO";
 
 function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
   return {
@@ -22,6 +24,8 @@ function mapVehicleToForm(vehicle: Vehicle): ReceptionFormData {
 
 export default function ReceptionPage() {
   const [searchValue, setSearchValue] = useState("");
+  const [filter, setFilter] = useState<ReceptionFilter>("FALTANTE");
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [events, setEvents] = useState<VehicleEvent[]>([]);
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -48,6 +52,40 @@ export default function ReceptionPage() {
     }
   };
 
+  const fetchVehiclesByFilter = async (currentFilter: ReceptionFilter, vinValue = "") => {
+    try {
+      setLoading(true);
+
+      const params: Record<string, string> = {
+        status: currentFilter,
+      };
+
+      if (vinValue.trim()) {
+        params.vin = vinValue.trim();
+      }
+
+      const response = await api.get<Vehicle[]>("/vehicles/", { params });
+      setVehicles(response.data);
+    } catch (error) {
+      console.error("Error cargando vehículos filtrados", error);
+      alert("No se pudieron cargar los vehículos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVehiclesByFilter(filter, searchValue);
+  }, [filter]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      fetchVehiclesByFilter(filter, searchValue);
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [searchValue]);
+
   const focusSearchInput = () => {
     setTimeout(() => {
       const input = document.querySelector(
@@ -59,12 +97,21 @@ export default function ReceptionPage() {
     }, 0);
   };
 
+  const selectVehicle = async (selected: Vehicle) => {
+    setVehicle(selected);
+    setFormData(mapVehicleToForm(selected));
+    setSearchValue(selected.vin);
+    await fetchVehicleEvents(selected.id);
+    focusSearchInput();
+  };
+
   const reloadVehicle = async (vehicleId: number) => {
     const updated = await api.get<Vehicle>(`/vehicles/${vehicleId}`);
     setVehicle(updated.data);
     setFormData(mapVehicleToForm(updated.data));
     setSearchValue(updated.data.vin);
     await fetchVehicleEvents(updated.data.id);
+    await fetchVehiclesByFilter(filter, searchValue);
   };
 
   const searchVehicle = async (vinValue: string) => {
@@ -77,21 +124,20 @@ export default function ReceptionPage() {
       setLoading(true);
 
       const response = await api.get<Vehicle[]>("/vehicles/", {
-        params: { vin: vinValue.trim() },
+        params: {
+          vin: vinValue.trim(),
+          status: filter,
+        },
       });
 
       if (response.data.length === 0) {
-        alert("No se encontró ningún vehículo");
+        alert("No se encontró ningún vehículo con ese filtro");
         setVehicle(null);
         setEvents([]);
         return;
       }
 
-      const foundVehicle = response.data[0];
-      setVehicle(foundVehicle);
-      setFormData(mapVehicleToForm(foundVehicle));
-      setSearchValue(foundVehicle.vin);
-      await fetchVehicleEvents(foundVehicle.id);
+      await selectVehicle(response.data[0]);
     } catch (error) {
       console.error("Error buscando vehículo", error);
       alert("No se pudo buscar el vehículo");
@@ -199,12 +245,65 @@ export default function ReceptionPage() {
     }
   };
 
+  const getFilterTitle = () => {
+    if (filter === "FALTANTE") return "Pendientes de recepción";
+    if (filter === "DIRECTO") return "Vehículos directos";
+    return "Vehículos para almacenar";
+  };
+
   return (
     <div style={styles.page}>
       <h1 style={styles.title}>Recepción</h1>
       <p style={styles.subtitle}>
-        Escanea o ingresa el VIN, valida los datos y selecciona el flujo operativo.
+        Filtra, escanea o busca vehículos por VIN y selecciona el flujo operativo.
       </p>
+
+      <div style={styles.filterCard}>
+        <button
+          style={{
+            ...styles.filterButton,
+            ...(filter === "FALTANTE" ? styles.activeFilter : {}),
+          }}
+          onClick={() => {
+            setFilter("FALTANTE");
+            setVehicle(null);
+            setEvents([]);
+            setSearchValue("");
+          }}
+        >
+          Pendientes
+        </button>
+
+        <button
+          style={{
+            ...styles.filterButton,
+            ...(filter === "DIRECTO" ? styles.activeFilter : {}),
+          }}
+          onClick={() => {
+            setFilter("DIRECTO");
+            setVehicle(null);
+            setEvents([]);
+            setSearchValue("");
+          }}
+        >
+          Directos
+        </button>
+
+        <button
+          style={{
+            ...styles.filterButton,
+            ...(filter === "ALMACENADO" ? styles.activeFilter : {}),
+          }}
+          onClick={() => {
+            setFilter("ALMACENADO");
+            setVehicle(null);
+            setEvents([]);
+            setSearchValue("");
+          }}
+        >
+          Para almacenar
+        </button>
+      </div>
 
       <ReceptionSearch
         searchValue={searchValue}
@@ -223,32 +322,72 @@ export default function ReceptionPage() {
         />
       ) : null}
 
-      {vehicle ? (
-        <div style={styles.infoCard}>
-          <p><strong>ID:</strong> {vehicle.id}</p>
-          <p><strong>Estado actual:</strong> {vehicle.status}</p>
-          <p><strong>Porteador:</strong> {vehicle.carrier_name ?? "-"}</p>
-          <p><strong>Sector:</strong> {vehicle.sector_name ?? "-"}</p>
-          <p><strong>Código de barra:</strong> {vehicle.vin}</p>
-          <p><strong>BL:</strong> {vehicle.shipment_bl ?? "-"}</p>
+      <div style={styles.layout}>
+        <div style={styles.card}>
+          <h2 style={styles.sectionTitle}>{getFilterTitle()}</h2>
+
+          {loading ? <p style={styles.loading}>Cargando...</p> : null}
+
+          {vehicles.length === 0 ? (
+            <div style={styles.empty}>No hay vehículos para este filtro.</div>
+          ) : (
+            <div style={styles.vehicleList}>
+              {vehicles.map((item) => (
+                <button
+                  key={item.id}
+                  style={{
+                    ...styles.vehicleItem,
+                    ...(vehicle?.id === item.id ? styles.vehicleItemActive : {}),
+                  }}
+                  onClick={() => selectVehicle(item)}
+                >
+                  <strong>{item.vin}</strong>
+                  <span>
+                    {item.brand ?? "-"} {item.model ?? ""}
+                  </span>
+                  <small>
+                    Estado: {item.status} · BL: {item.shipment_bl ?? "-"} · Porteador:{" "}
+                    {item.carrier_name ?? "-"}
+                  </small>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      ) : null}
 
-      {vehicle ? (
-        <ReceptionForm
-          formData={formData}
-          status={vehicle.status}
-          onChange={handleChange}
-          onSave={handleSave}
-          onMarkDirect={() => handleChangeStatus("DIRECTO")}
-          onMarkStored={() => handleChangeStatus("ALMACENADO")}
-          onMarkTransit={() => handleChangeStatus("EN_TRANSITO")}
-          onDispatch={() => handleChangeStatus("DESPACHADO")}
-          loading={loading}
-        />
-      ) : null}
+        <div>
+          {vehicle ? (
+            <div style={styles.infoCard}>
+              <p><strong>ID:</strong> {vehicle.id}</p>
+              <p><strong>Estado actual:</strong> {vehicle.status}</p>
+              <p><strong>Porteador:</strong> {vehicle.carrier_name ?? "-"}</p>
+              <p><strong>Sector:</strong> {vehicle.sector_name ?? "-"}</p>
+              <p><strong>Código de barra:</strong> {vehicle.vin}</p>
+              <p><strong>BL:</strong> {vehicle.shipment_bl ?? "-"}</p>
+            </div>
+          ) : null}
 
-      {vehicle ? <VehicleTimeline events={events} /> : null}
+          {vehicle ? (
+            <ReceptionForm
+              formData={formData}
+              status={vehicle.status}
+              onChange={handleChange}
+              onSave={handleSave}
+              onMarkDirect={() => handleChangeStatus("DIRECTO")}
+              onMarkStored={() => handleChangeStatus("ALMACENADO")}
+              onMarkTransit={() => handleChangeStatus("EN_TRANSITO")}
+              onDispatch={() => handleChangeStatus("DESPACHADO")}
+              loading={loading}
+            />
+          ) : (
+            <div style={styles.infoCard}>
+              <p style={styles.emptyText}>Selecciona un vehículo para ver y actualizar sus datos.</p>
+            </div>
+          )}
+
+          {vehicle ? <VehicleTimeline events={events} /> : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -266,6 +405,85 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 0,
     marginBottom: "20px",
     color: "#6b7280",
+  },
+  filterCard: {
+    background: "#fff",
+    borderRadius: "16px",
+    padding: "14px",
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+    marginBottom: "16px",
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  filterButton: {
+    padding: "11px 14px",
+    borderRadius: "10px",
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  activeFilter: {
+    background: "#111827",
+    color: "#fff",
+    border: "1px solid #111827",
+  },
+  layout: {
+    display: "grid",
+    gridTemplateColumns:
+      window.innerWidth < 980 ? "1fr" : "minmax(320px, 0.9fr) minmax(0, 1.4fr)",
+    gap: "20px",
+    alignItems: "start",
+  },
+  card: {
+    background: "#fff",
+    borderRadius: "16px",
+    padding: "20px",
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+    marginBottom: "20px",
+  },
+  sectionTitle: {
+    marginTop: 0,
+  },
+  loading: {
+    color: "#6b7280",
+  },
+  empty: {
+    padding: "18px",
+    borderRadius: "12px",
+    background: "#f9fafb",
+    border: "1px dashed #d1d5db",
+    color: "#6b7280",
+    textAlign: "center",
+  },
+  emptyText: {
+    color: "#6b7280",
+    margin: 0,
+  },
+  vehicleList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    maxHeight: "520px",
+    overflowY: "auto",
+  },
+  vehicleItem: {
+    textAlign: "left",
+    padding: "14px",
+    borderRadius: "12px",
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+  vehicleItemActive: {
+    border: "2px solid #111827",
+    background: "#f9fafb",
   },
   infoCard: {
     background: "#fff",

@@ -14,6 +14,7 @@ const links = [
   { to: "/parking-map", label: "Mapa de posiciones" },
   { to: "/logistics", label: "Logística" },
   { to: "/carriers", label: "Porteadores" },
+  { to: "/dispatch-yard", label: "Despacho patio" },
 ];
 
 export default function Sidebar({

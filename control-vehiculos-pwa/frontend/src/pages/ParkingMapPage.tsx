@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import ParkingGrid from "../components/ParkingGrid";
 import type { ParkingSlot, SlotVehicleInfo } from "../types/parking";
 import type { Vehicle } from "../types/vehicle";
 import type { Sector } from "../types/catalogs";
+
+type SlotFilter = "TODOS" | "DISPONIBLE" | "OCUPADO" | "SALIDA";
 
 export default function ParkingMapPage() {
   const [slots, setSlots] = useState<ParkingSlot[]>([]);
@@ -15,6 +17,10 @@ export default function ParkingMapPage() {
   const [selectedSlotVehicle, setSelectedSlotVehicle] = useState<SlotVehicleInfo | null>(null);
   const [slotVehicles, setSlotVehicles] = useState<Record<number, SlotVehicleInfo>>({});
   const [loading, setLoading] = useState(false);
+
+  const [mapSearch, setMapSearch] = useState("");
+  const [slotFilter, setSlotFilter] = useState<SlotFilter>("TODOS");
+  const [highlightedSlotId, setHighlightedSlotId] = useState<number | null>(null);
 
   const fetchData = async (sectorId: string) => {
     try {
@@ -72,6 +78,58 @@ export default function ParkingMapPage() {
     return () => clearInterval(interval);
   }, [selectedSectorId]);
 
+  const stats = useMemo(() => {
+    const total = slots.length;
+    const disponibles = slots.filter((slot) => slot.visual_status === "DISPONIBLE").length;
+    const ocupados = slots.filter((slot) => slot.visual_status === "OCUPADO").length;
+    const salida = slots.filter((slot) => slot.visual_status === "SALIDA").length;
+    const ocupacion = total === 0 ? 0 : Math.round((ocupados / total) * 100);
+
+    return {
+      total,
+      disponibles,
+      ocupados,
+      salida,
+      ocupacion,
+    };
+  }, [slots]);
+
+  const visibleSlots = useMemo(() => {
+    if (slotFilter === "TODOS") return slots;
+    return slots.filter((slot) => slot.visual_status === slotFilter);
+  }, [slots, slotFilter]);
+
+  const handleSearchInMap = () => {
+    if (!mapSearch.trim()) {
+      setHighlightedSlotId(null);
+      alert("Ingresa parte del VIN para buscar en el mapa");
+      return;
+    }
+
+    const search = mapSearch.trim().toLowerCase();
+
+    const foundEntry = Object.entries(slotVehicles).find(([, vehicle]) =>
+      vehicle.vin.toLowerCase().includes(search)
+    );
+
+    if (!foundEntry) {
+      setHighlightedSlotId(null);
+      setSelectedSlot(null);
+      setSelectedSlotVehicle(null);
+      alert("No se encontró ese VIN en el mapa");
+      return;
+    }
+
+    const slotId = Number(foundEntry[0]);
+    const foundSlot = slots.find((slot) => slot.id === slotId) ?? null;
+    const foundVehicle = foundEntry[1];
+
+    setHighlightedSlotId(slotId);
+    setSelectedSlot(foundSlot);
+    setSelectedSlotVehicle(foundVehicle);
+    setSlotFilter("TODOS");
+  };
+
   const handleAssign = async () => {
     if (!selectedVehicleId) {
       alert("Debes seleccionar un vehículo");
@@ -100,6 +158,7 @@ export default function ParkingMapPage() {
       setSelectedVehicleId("");
       setSelectedSlot(null);
       setSelectedSlotVehicle(null);
+      setHighlightedSlotId(null);
       await fetchData(selectedSectorId);
     } catch (error) {
       console.error("Error asignando slot", error);
@@ -125,13 +184,15 @@ export default function ParkingMapPage() {
       setSelectedSlot(null);
       setSelectedSlotVehicle(null);
       setSlotVehicles({});
+      setHighlightedSlotId(null);
+      setMapSearch("");
 
       await fetchData(selectedSectorId);
 
       alert("Mapa limpiado correctamente");
     } catch (error) {
       console.error("Error limpiando mapa", error);
-      alert("No se pudo limpiar el mapa. Revisa que exista el endpoint /parking-slots/reset");
+      alert("No se pudo limpiar el mapa.");
     } finally {
       setLoading(false);
     }
@@ -139,6 +200,7 @@ export default function ParkingMapPage() {
 
   const handleSelectSlot = async (slot: ParkingSlot) => {
     setSelectedSlot(slot);
+    setHighlightedSlotId(slot.id);
 
     if (slot.visual_status === "OCUPADO") {
       try {
@@ -156,8 +218,30 @@ export default function ParkingMapPage() {
     <div style={styles.page}>
       <h1 style={styles.title}>Mapa de Posiciones</h1>
       <p style={styles.subtitle}>
-        Selecciona un vehículo almacenado y asígnale una ubicación física en el patio.
+        Control visual del patio, búsqueda de vehículos y asignación de posiciones.
       </p>
+
+      <div style={styles.kpiGrid}>
+        <div style={styles.kpiCard}>
+          <span>Total slots</span>
+          <strong>{stats.total}</strong>
+        </div>
+
+        <div style={styles.kpiCard}>
+          <span>Disponibles</span>
+          <strong>{stats.disponibles}</strong>
+        </div>
+
+        <div style={styles.kpiCard}>
+          <span>Ocupados</span>
+          <strong>{stats.ocupados}</strong>
+        </div>
+
+        <div style={styles.kpiCard}>
+          <span>Ocupación</span>
+          <strong>{stats.ocupacion}%</strong>
+        </div>
+      </div>
 
       <div style={styles.card}>
         <div style={styles.formRow}>
@@ -170,6 +254,7 @@ export default function ParkingMapPage() {
                 setSelectedSectorId(e.target.value);
                 setSelectedSlot(null);
                 setSelectedSlotVehicle(null);
+                setHighlightedSlotId(null);
               }}
             >
               {sectors.map((sector) => (
@@ -218,11 +303,46 @@ export default function ParkingMapPage() {
         </div>
       </div>
 
-      {selectedSlot && selectedSlot.visual_status === "OCUPADO" ? (
+      <div style={styles.card}>
+        <h3 style={styles.sectionTitle}>Búsqueda inteligente en mapa</h3>
+
+        <div style={styles.searchRow}>
+          <input
+            style={styles.input}
+            value={mapSearch}
+            onChange={(e) => setMapSearch(e.target.value)}
+            placeholder="Buscar VIN dentro del mapa"
+          />
+
+          <button style={styles.button} onClick={handleSearchInMap}>
+            Buscar VIN
+          </button>
+        </div>
+
+        <div style={styles.filterRow}>
+          {(["TODOS", "DISPONIBLE", "OCUPADO", "SALIDA"] as SlotFilter[]).map((filter) => (
+            <button
+              key={filter}
+              style={{
+                ...styles.filterButton,
+                ...(slotFilter === filter ? styles.activeFilterButton : {}),
+              }}
+              onClick={() => setSlotFilter(filter)}
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedSlot ? (
         <div style={styles.card}>
-          <h3 style={styles.sectionTitle}>Detalle del slot ocupado</h3>
+          <h3 style={styles.sectionTitle}>Detalle del slot</h3>
           <p>
             <strong>Slot:</strong> {selectedSlot.code}
+          </p>
+          <p>
+            <strong>Estado visual:</strong> {selectedSlot.visual_status}
           </p>
 
           {selectedSlotVehicle ? (
@@ -231,7 +351,7 @@ export default function ParkingMapPage() {
                 <strong>VIN:</strong> {selectedSlotVehicle.vin}
               </p>
               <p>
-                <strong>Estado:</strong> {selectedSlotVehicle.status}
+                <strong>Estado vehículo:</strong> {selectedSlotVehicle.status}
               </p>
               <p>
                 <strong>Porteador:</strong> {selectedSlotVehicle.carrier_name ?? "-"}
@@ -242,15 +362,16 @@ export default function ParkingMapPage() {
               </p>
             </>
           ) : (
-            <p>No se pudo cargar el detalle del vehículo.</p>
+            <p>Este slot no tiene vehículo asociado.</p>
           )}
         </div>
       ) : null}
 
       <div style={styles.card}>
         <ParkingGrid
-          slots={slots}
+          slots={visibleSlots}
           selectedSlotId={selectedSlot?.id ?? null}
+          highlightedSlotId={highlightedSlotId}
           slotVehicles={slotVehicles}
           onSelectSlot={handleSelectSlot}
         />
@@ -273,6 +394,22 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "20px",
     color: "#6b7280",
   },
+  kpiGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: "12px",
+    marginBottom: "20px",
+  },
+  kpiCard: {
+    background: "#fff",
+    borderRadius: "16px",
+    padding: "18px",
+    border: "1px solid #e5e7eb",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
   card: {
     background: "#fff",
     borderRadius: "16px",
@@ -289,6 +426,30 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
     gap: "16px",
+  },
+  searchRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: "12px",
+    marginBottom: "14px",
+  },
+  filterRow: {
+    display: "flex",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  filterButton: {
+    padding: "10px 12px",
+    borderRadius: "10px",
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  activeFilterButton: {
+    background: "#111827",
+    color: "#fff",
+    border: "1px solid #111827",
   },
   field: {
     display: "flex",

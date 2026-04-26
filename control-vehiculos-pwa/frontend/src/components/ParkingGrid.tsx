@@ -3,6 +3,7 @@ import type { ParkingSlot, SlotVehicleInfo } from "../types/parking";
 type Props = {
   slots: ParkingSlot[];
   selectedSlotId: number | null;
+  highlightedSlotId: number | null;
   slotVehicles: Record<number, SlotVehicleInfo>;
   onSelectSlot: (slot: ParkingSlot) => void;
 };
@@ -35,7 +36,11 @@ function getSlotsByLetter(slots: ParkingSlot[], letter: string) {
     .sort((a, b) => getSlotParts(a.code).number - getSlotParts(b.code).number);
 }
 
-function getSlotStyle(slot: ParkingSlot, selected: boolean): React.CSSProperties {
+function getSlotStyle(
+  slot: ParkingSlot,
+  selected: boolean,
+  highlighted: boolean
+): React.CSSProperties {
   let background = "#dcfce7";
   let color = "#166534";
   let border = "2px solid transparent";
@@ -54,6 +59,10 @@ function getSlotStyle(slot: ParkingSlot, selected: boolean): React.CSSProperties
     border = "2px solid #111827";
   }
 
+  if (highlighted) {
+    border = "3px solid #2563eb";
+  }
+
   return {
     background,
     color,
@@ -69,13 +78,19 @@ function getSlotStyle(slot: ParkingSlot, selected: boolean): React.CSSProperties
     flexDirection: "column",
     justifyContent: "center",
     gap: "5px",
-    boxShadow: selected ? "0 0 0 3px rgba(17,24,39,0.15)" : "none",
+    boxShadow: highlighted
+      ? "0 0 0 5px rgba(37,99,235,0.18)"
+      : selected
+      ? "0 0 0 3px rgba(17,24,39,0.15)"
+      : "none",
+    transform: highlighted ? "scale(1.03)" : "scale(1)",
   };
 }
 
 export default function ParkingGrid({
   slots,
   selectedSlotId,
+  highlightedSlotId,
   slotVehicles,
   onSelectSlot,
 }: Props) {
@@ -93,70 +108,79 @@ export default function ParkingGrid({
         <span style={styles.legendItem}>
           <span style={{ ...styles.dot, background: "#fee2e2" }} /> Ocupado
         </span>
+        <span style={styles.legendItem}>
+          <span style={{ ...styles.dot, background: "#2563eb" }} /> Buscado
+        </span>
       </div>
 
       <div style={styles.portHeader}>
         <div>
-          <h3 style={styles.portTitle}>Sector 8 - Layout de patio</h3>
+          <h3 style={styles.portTitle}>Sector 8 - Layout inteligente de patio</h3>
           <p style={styles.portSubtitle}>
-            Filas verticales de almacenamiento con calles de circulación entre bloques.
+            Filas verticales con calles de circulación, búsqueda VIN y resaltado de ubicación.
           </p>
         </div>
 
         <div style={styles.gateBox}>Acceso / Salida</div>
       </div>
 
-      <div style={styles.yardWrapper}>
-        <div style={styles.yard}>
-          {letters.map((letter, index) => {
-            const letterSlots = getSlotsByLetter(slots, letter);
+      {slots.length === 0 ? (
+        <div style={styles.empty}>No hay slots para mostrar con este filtro.</div>
+      ) : (
+        <div style={styles.yardWrapper}>
+          <div style={styles.yard}>
+            {letters.map((letter, index) => {
+              const letterSlots = getSlotsByLetter(slots, letter);
 
-            return (
-              <div key={letter} style={styles.blockGroup}>
-                <div style={styles.columnBlock}>
-                  <div style={styles.columnTitle}>Fila {letter}</div>
+              return (
+                <div key={letter} style={styles.blockGroup}>
+                  <div style={styles.columnBlock}>
+                    <div style={styles.columnTitle}>Fila {letter}</div>
 
-                  <div style={styles.slotColumn}>
-                    {letterSlots.map((slot) => {
-                      const slotVehicle = slotVehicles[slot.id];
+                    <div style={styles.slotColumn}>
+                      {letterSlots.map((slot) => {
+                        const slotVehicle = slotVehicles[slot.id];
+                        const selected = selectedSlotId === slot.id;
+                        const highlighted = highlightedSlotId === slot.id;
 
-                      return (
-                        <div
-                          key={slot.id}
-                          style={getSlotStyle(slot, selectedSlotId === slot.id)}
-                          onClick={() => onSelectSlot(slot)}
-                        >
-                          <div style={styles.slotCode}>{slot.code}</div>
-                          <div style={styles.subtext}>{slot.visual_status}</div>
+                        return (
+                          <div
+                            key={slot.id}
+                            style={getSlotStyle(slot, selected, highlighted)}
+                            onClick={() => onSelectSlot(slot)}
+                          >
+                            <div style={styles.slotCode}>{slot.code}</div>
+                            <div style={styles.subtext}>{slot.visual_status}</div>
 
-                          {slotVehicle ? (
-                            <div style={styles.vehicleInfo}>
-                              <div style={styles.vin}>{slotVehicle.vin}</div>
-                              <div style={styles.modelText}>
-                                {slotVehicle.brand ?? "-"} {slotVehicle.model ?? ""}
+                            {slotVehicle ? (
+                              <div style={styles.vehicleInfo}>
+                                <div style={styles.vin}>{slotVehicle.vin}</div>
+                                <div style={styles.modelText}>
+                                  {slotVehicle.brand ?? "-"} {slotVehicle.model ?? ""}
+                                </div>
                               </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
-                {index < letters.length - 1 ? (
-                  <div style={styles.verticalRoad}>
-                    <span>C</span>
-                    <span>A</span>
-                    <span>L</span>
-                    <span>L</span>
-                    <span>E</span>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+                  {index < letters.length - 1 ? (
+                    <div style={styles.verticalRoad}>
+                      <span>C</span>
+                      <span>A</span>
+                      <span>L</span>
+                      <span>L</span>
+                      <span>E</span>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -283,5 +307,13 @@ const styles: Record<string, React.CSSProperties> = {
   modelText: {
     opacity: 0.9,
     marginTop: "2px",
+  },
+  empty: {
+    padding: "24px",
+    borderRadius: "14px",
+    background: "#f9fafb",
+    border: "1px dashed #d1d5db",
+    color: "#6b7280",
+    textAlign: "center",
   },
 };
