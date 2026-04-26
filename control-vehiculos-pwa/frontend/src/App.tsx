@@ -20,6 +20,7 @@ import YardDispatchPage from "./pages/YardDispatchPage";
 import AlertsPage from "./pages/AlertsPage";
 import DashboardGeneralPage from "./pages/DashboardGeneralPage";
 import UsersPage from "./pages/UsersPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
 
 export default function App() {
   return (
@@ -103,6 +104,7 @@ export default function App() {
               <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
                 <Route path="/carriers" element={<CarriersPage />} />
                 <Route path="/users" element={<UsersPage />} />
+                <Route path="/audit-logs" element={<AuditLogsPage />} />
               </Route>
             </Route>
           </Route>

@@ -32,6 +32,11 @@ const links: SidebarLink[] = [
     roles: ["ADMIN"],
   },
   {
+    to: "/audit-logs",
+    label: "Auditoría",
+    roles: ["ADMIN"],
+  },
+  {
     to: "/vehicles",
     label: "Vehículos",
     roles: ["ADMIN", "SUPERVISOR", "OPERADOR"],
