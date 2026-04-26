@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, timezone
+import secrets
 
 from app.core.database import get_db
 from app.core.security import (
@@ -10,7 +12,18 @@ from app.core.security import (
     require_roles,
 )
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, LoginRequest, TokenResponse
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    LoginRequest,
+    TokenResponse,
+    UserPermissionsUpdate,
+    UserPasswordReset,
+    UserRequirePasswordChange,
+    ForgotPasswordRequest,
+    ResetPasswordWithTokenRequest,
+    PasswordChangeRequestFromLogin,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -42,7 +55,9 @@ def register_user(
         email=payload.email,
         hashed_password=hash_password(payload.password),
         role=role,
+        permissions=payload.permissions or [],
         is_active=True,
+        must_change_password=False,
     )
 
     db.add(user)
@@ -83,9 +98,11 @@ def list_users(
 ):
     return db.query(User).order_by(User.id.asc()).all()
 
-@router.patch("/users/{user_id}/toggle-active", response_model=UserResponse)
-def toggle_user_active(
+
+@router.patch("/users/{user_id}/permissions", response_model=UserResponse)
+def update_user_permissions(
     user_id: int,
+    payload: UserPermissionsUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("ADMIN")),
 ):
@@ -94,13 +111,154 @@ def toggle_user_active(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    # 🔥 evitar que se desactive a sí mismo
-    if user.id == current_user.id:
-        raise HTTPException(status_code=400, detail="No puedes desactivarte a ti mismo")
+    valid_permissions = {
+        "DASHBOARD_GENERAL",
+        "DASHBOARD_BL",
+        "ALERTAS",
+    }
 
-    user.is_active = not user.is_active
+    for permission in payload.permissions:
+        if permission not in valid_permissions:
+            raise HTTPException(status_code=400, detail=f"Permiso no válido: {permission}")
+
+    user.permissions = payload.permissions
 
     db.commit()
     db.refresh(user)
 
     return user
+
+
+# 🔐 ADMIN CAMBIA CONTRASEÑA
+@router.patch("/users/{user_id}/password", response_model=UserResponse)
+def admin_change_user_password(
+    user_id: int,
+    payload: UserPasswordReset,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN")),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if len(payload.new_password.strip()) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="La contraseña debe tener al menos 6 caracteres",
+        )
+
+    user.hashed_password = hash_password(payload.new_password.strip())
+    user.must_change_password = False
+    user.reset_token = None
+    user.reset_token_expires_at = None
+
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+# 🔐 MARCAR CAMBIO DE CONTRASEÑA
+@router.patch("/users/{user_id}/require-password-change", response_model=UserResponse)
+def require_user_password_change(
+    user_id: int,
+    payload: UserRequirePasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN")),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    user.must_change_password = payload.must_change_password
+
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+# 🔥 NUEVO: SOLICITUD DESDE LOGIN
+@router.post("/request-password-change")
+def request_password_change_from_login(
+    payload: PasswordChangeRequestFromLogin,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.username == payload.username).first()
+
+    # No revelar si existe o no
+    if not user:
+        return {
+            "message": "Si el usuario existe, se notificará al administrador"
+        }
+
+    user.must_change_password = True
+
+    db.commit()
+
+    return {
+        "message": "Solicitud enviada. Un ADMIN podrá cambiar tu contraseña desde Usuarios."
+    }
+
+
+# =========================
+# RECUPERAR CONTRASEÑA
+# =========================
+
+@router.post("/forgot-password")
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.email == payload.email).first()
+
+    if not user:
+        return {"message": "Si el correo existe, se generará una recuperación de contraseña"}
+
+    token = secrets.token_urlsafe(32)
+
+    user.reset_token = token
+    user.reset_token_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+
+    db.commit()
+
+    return {
+        "message": "Token de recuperación generado",
+        "reset_token": token,
+    }
+
+
+@router.post("/reset-password")
+def reset_password_with_token(
+    payload: ResetPasswordWithTokenRequest,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.reset_token == payload.token).first()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Token inválido")
+
+    if not user.reset_token_expires_at:
+        raise HTTPException(status_code=400, detail="Token inválido o expirado")
+
+    expires_at = user.reset_token_expires_at
+
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at < datetime.now(timezone.utc):
+        user.reset_token = None
+        user.reset_token_expires_at = None
+        db.commit()
+        raise HTTPException(status_code=400, detail="Token expirado")
+
+    user.hashed_password = hash_password(payload.new_password)
+    user.must_change_password = False
+    user.reset_token = None
+    user.reset_token_expires_at = None
+
+    db.commit()
+
+    return {"message": "Contraseña actualizada correctamente"}

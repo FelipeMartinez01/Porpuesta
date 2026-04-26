@@ -2,15 +2,24 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "../api/client";
 
 type User = {
+  id: number;
   username: string;
+  full_name: string | null;
+  email: string | null;
   role: string;
+  permissions: string[];
+  is_active: boolean;
+  must_change_password: boolean;
+  created_at: string;
 };
 
 type AuthContextType = {
   user: User | null;
   token: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  loading: boolean;
+  login: (username: string, password: string) => Promise<User>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -20,11 +29,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(
     localStorage.getItem("token")
   );
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    }
+    const initAuth = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+        const res = await api.get<User>("/auth/me");
+
+        setUser(res.data);
+      } catch (error) {
+        console.error("Token inválido, cerrando sesión", error);
+        logout();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
   }, [token]);
 
   const login = async (username: string, password: string) => {
@@ -37,16 +65,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     localStorage.setItem("token", access_token);
 
+    api.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
+
     setToken(access_token);
     setUser(user);
 
-    api.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
+    return user;
+  };
+
+  const refreshUser = async () => {
+    const res = await api.get<User>("/auth/me");
+    setUser(res.data);
   };
 
   const logout = () => {
     localStorage.removeItem("token");
 
-    // limpiar header global
     delete api.defaults.headers.common["Authorization"];
 
     setToken(null);
@@ -54,8 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
-      {children}
+    <AuthContext.Provider
+      value={{ user, token, loading, login, logout, refreshUser }}
+    >
+      {!loading && children}
     </AuthContext.Provider>
   );
 }

@@ -7,15 +7,26 @@ type User = {
   full_name: string | null;
   email: string | null;
   role: string;
+  permissions: string[];
   is_active: boolean;
   created_at: string;
+  must_change_password?: boolean;
 };
 
 const roles = ["ADMIN", "SUPERVISOR", "OPERADOR", "CONTROL_DOCUMENTO"];
 
+const dashboardPermissions = [
+  { value: "DASHBOARD_GENERAL", label: "Dashboard general" },
+  { value: "DASHBOARD_BL", label: "Dashboard por BL" },
+  { value: "ALERTAS", label: "Alertas" },
+];
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const [form, setForm] = useState({
     username: "",
@@ -42,6 +53,10 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
+  const usersNeedPasswordChange = users.filter(
+    (user) => user.must_change_password
+  );
+
   const handleChange = (field: string, value: string) => {
     setForm((prev) => ({
       ...prev,
@@ -62,6 +77,7 @@ export default function UsersPage() {
         full_name: form.full_name.trim() || null,
         email: form.email.trim() || null,
         role: form.role,
+        permissions: [],
       });
 
       alert("Usuario creado correctamente");
@@ -83,7 +99,9 @@ export default function UsersPage() {
 
   const handleToggleActive = async (user: User) => {
     const action = user.is_active ? "desactivar" : "activar";
-    const confirmed = confirm(`¿Seguro que quieres ${action} al usuario ${user.username}?`);
+    const confirmed = confirm(
+      `¿Seguro que quieres ${action} al usuario ${user.username}?`
+    );
 
     if (!confirmed) return;
 
@@ -96,13 +114,107 @@ export default function UsersPage() {
     }
   };
 
+  const handlePermissionChange = async (
+    user: User,
+    permission: string,
+    checked: boolean
+  ) => {
+    const currentPermissions = user.permissions ?? [];
+
+    const newPermissions = checked
+      ? [...currentPermissions, permission]
+      : currentPermissions.filter((item) => item !== permission);
+
+    try {
+      await api.patch(`/auth/users/${user.id}/permissions`, {
+        permissions: newPermissions,
+      });
+
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error actualizando permisos", error);
+      alert("No se pudieron actualizar los permisos");
+    }
+  };
+
+  const openPasswordModal = (user: User) => {
+    setSelectedUser(user);
+    setNewPassword("");
+  };
+
+  const closePasswordModal = () => {
+    setSelectedUser(null);
+    setNewPassword("");
+  };
+
+  const handleChangePassword = async () => {
+    if (!selectedUser) return;
+
+    if (!newPassword.trim()) {
+      alert("Debes ingresar una nueva contraseña");
+      return;
+    }
+
+    if (newPassword.trim().length < 6) {
+      alert("La contraseña debe tener al menos 6 caracteres");
+      return;
+    }
+
+    const confirmed = confirm(
+      `¿Seguro que quieres cambiar la contraseña de ${selectedUser.username}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await api.patch(`/auth/users/${selectedUser.id}/password`, {
+        new_password: newPassword.trim(),
+      });
+
+      alert("Contraseña cambiada correctamente");
+      closePasswordModal();
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error cambiando contraseña", error);
+      alert("No se pudo cambiar la contraseña");
+    }
+  };
+
+  const handleMarkPasswordChange = async (user: User) => {
+    try {
+      await api.patch(`/auth/users/${user.id}/require-password-change`, {
+        must_change_password: true,
+      });
+
+      alert(`Se marcó a ${user.username} para cambio de contraseña`);
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error marcando cambio de contraseña", error);
+      alert("No se pudo marcar el cambio de contraseña");
+    }
+  };
+
+  const handleClearPasswordChange = async (user: User) => {
+    try {
+      await api.patch(`/auth/users/${user.id}/require-password-change`, {
+        must_change_password: false,
+      });
+
+      alert(`Se quitó la alerta de cambio de contraseña para ${user.username}`);
+      await fetchUsers();
+    } catch (error) {
+      console.error("Error quitando alerta", error);
+      alert("No se pudo quitar la alerta");
+    }
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>Usuarios</h1>
           <p style={styles.subtitle}>
-            Administración de usuarios, roles y estado de acceso al sistema.
+            Administración de usuarios, roles, permisos, contraseñas y estado de acceso.
           </p>
         </div>
 
@@ -110,6 +222,13 @@ export default function UsersPage() {
           {loading ? "Cargando..." : "Actualizar"}
         </button>
       </div>
+
+      {usersNeedPasswordChange.length > 0 ? (
+        <div style={styles.alertBox}>
+          <strong>Usuarios que necesitan cambio de contraseña:</strong>{" "}
+          {usersNeedPasswordChange.map((user) => user.username).join(", ")}
+        </div>
+      ) : null}
 
       <div style={styles.card}>
         <h2 style={styles.sectionTitle}>Crear usuario</h2>
@@ -186,6 +305,8 @@ export default function UsersPage() {
                 <th style={styles.th}>Nombre</th>
                 <th style={styles.th}>Email</th>
                 <th style={styles.th}>Rol</th>
+                <th style={styles.th}>Dashboards</th>
+                <th style={styles.th}>Contraseña</th>
                 <th style={styles.th}>Estado</th>
                 <th style={styles.th}>Acción</th>
               </tr>
@@ -200,21 +321,83 @@ export default function UsersPage() {
                   <td style={styles.td}>
                     <span style={styles.badge}>{user.role}</span>
                   </td>
+
+                  <td style={styles.td}>
+                    <div style={styles.permissionBox}>
+                      {dashboardPermissions.map((permission) => (
+                        <label key={permission.value} style={styles.permissionItem}>
+                          <input
+                            type="checkbox"
+                            checked={(user.permissions ?? []).includes(permission.value)}
+                            onChange={(e) =>
+                              handlePermissionChange(
+                                user,
+                                permission.value,
+                                e.target.checked
+                              )
+                            }
+                          />
+                          {permission.label}
+                        </label>
+                      ))}
+                    </div>
+                  </td>
+
+                  <td style={styles.td}>
+                    <div style={styles.passwordActions}>
+                      {user.must_change_password ? (
+                        <span style={styles.passwordWarning}>
+                          Requiere cambio
+                        </span>
+                      ) : (
+                        <span style={styles.passwordOk}>OK</span>
+                      )}
+
+                      <button
+                        style={styles.passwordButton}
+                        onClick={() => openPasswordModal(user)}
+                      >
+                        Cambiar
+                      </button>
+
+                      {user.must_change_password ? (
+                        <button
+                          style={styles.clearAlertButton}
+                          onClick={() => handleClearPasswordChange(user)}
+                        >
+                          Quitar alerta
+                        </button>
+                      ) : (
+                        <button
+                          style={styles.warningButton}
+                          onClick={() => handleMarkPasswordChange(user)}
+                        >
+                          Marcar alerta
+                        </button>
+                      )}
+                    </div>
+                  </td>
+
                   <td style={styles.td}>
                     <span
                       style={{
                         ...styles.statusBadge,
-                        ...(user.is_active ? styles.activeStatus : styles.inactiveStatus),
+                        ...(user.is_active
+                          ? styles.activeStatus
+                          : styles.inactiveStatus),
                       }}
                     >
                       {user.is_active ? "Activo" : "Inactivo"}
                     </span>
                   </td>
+
                   <td style={styles.td}>
                     <button
                       style={{
                         ...styles.toggleButton,
-                        ...(user.is_active ? styles.disableButton : styles.enableButton),
+                        ...(user.is_active
+                          ? styles.disableButton
+                          : styles.enableButton),
                       }}
                       onClick={() => handleToggleActive(user)}
                     >
@@ -231,6 +414,41 @@ export default function UsersPage() {
           <div style={styles.empty}>No hay usuarios registrados.</div>
         ) : null}
       </div>
+
+      {selectedUser ? (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <h2 style={styles.modalTitle}>
+              Cambiar contraseña
+            </h2>
+
+            <p style={styles.modalText}>
+              Usuario: <strong>{selectedUser.username}</strong>
+            </p>
+
+            <div style={styles.field}>
+              <label style={styles.label}>Nueva contraseña</label>
+              <input
+                style={styles.input}
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div style={styles.modalActions}>
+              <button style={styles.secondaryButton} onClick={closePasswordModal}>
+                Cancelar
+              </button>
+
+              <button style={styles.primaryButton} onClick={handleChangePassword}>
+                Guardar contraseña
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -257,6 +475,15 @@ const styles: Record<string, React.CSSProperties> = {
   subtitle: {
     margin: 0,
     color: "#6b7280",
+  },
+  alertBox: {
+    background: "#fef3c7",
+    border: "1px solid #f59e0b",
+    color: "#92400e",
+    padding: "14px 16px",
+    borderRadius: "12px",
+    marginBottom: "20px",
+    fontSize: "14px",
   },
   card: {
     background: "#fff",
@@ -330,6 +557,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #f3f4f6",
     fontSize: "14px",
     whiteSpace: "nowrap",
+    verticalAlign: "top",
   },
   badge: {
     background: "#111827",
@@ -338,6 +566,18 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "999px",
     fontSize: "12px",
     fontWeight: 800,
+  },
+  permissionBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  permissionItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "12px",
+    color: "#374151",
   },
   statusBadge: {
     padding: "6px 10px",
@@ -368,6 +608,59 @@ const styles: Record<string, React.CSSProperties> = {
   enableButton: {
     background: "#16a34a",
   },
+  passwordActions: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  passwordWarning: {
+    background: "#fef3c7",
+    color: "#92400e",
+    padding: "6px 10px",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 800,
+    textAlign: "center",
+  },
+  passwordOk: {
+    background: "#dcfce7",
+    color: "#166534",
+    padding: "6px 10px",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 800,
+    textAlign: "center",
+  },
+  passwordButton: {
+    padding: "8px 10px",
+    borderRadius: "8px",
+    border: "none",
+    background: "#2563eb",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+    fontSize: "12px",
+  },
+  warningButton: {
+    padding: "8px 10px",
+    borderRadius: "8px",
+    border: "none",
+    background: "#f59e0b",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+    fontSize: "12px",
+  },
+  clearAlertButton: {
+    padding: "8px 10px",
+    borderRadius: "8px",
+    border: "none",
+    background: "#6b7280",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+    fontSize: "12px",
+  },
   empty: {
     marginTop: "16px",
     padding: "18px",
@@ -376,5 +669,38 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px dashed #d1d5db",
     color: "#6b7280",
     textAlign: "center",
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+    padding: "16px",
+  },
+  modal: {
+    width: "100%",
+    maxWidth: "420px",
+    background: "#fff",
+    borderRadius: "16px",
+    padding: "22px",
+    boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+  },
+  modalTitle: {
+    marginTop: 0,
+    marginBottom: "8px",
+  },
+  modalText: {
+    marginTop: 0,
+    marginBottom: "18px",
+    color: "#374151",
+  },
+  modalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "12px",
+    marginTop: "20px",
   },
 };

@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./components/AppLayout";
 
 import LoginPage from "./pages/LoginPage";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import VehiclesPage from "./pages/VehiclesPage";
 import UploadPage from "./pages/UploadPage";
@@ -25,50 +26,86 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-
-          {/*PUBLICO */}
+          {/* PUBLICO */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/*BASE (login) */}
+          {/* BASE: requiere login */}
           <Route element={<ProtectedRoute />}>
-            <Route element={<AppLayout />}>
+            <Route path="/change-password" element={<ChangePasswordPage />} />
 
-              {/*ACCESO GENERAL*/}
+            <Route element={<AppLayout />}>
+              {/* ACCESO GENERAL */}
               <Route path="/" element={<DashboardPage />} />
               <Route path="/vehicles" element={<VehiclesPage />} />
               <Route path="/vehicles/:vehicleId/history" element={<VehicleHistoryPage />} />
-              <Route path="/shipments-dashboard" element={<ShipmentDashboardPage />} />
               <Route path="/shipments/:shipmentId" element={<ShipmentDetailPage />} />
 
-              {/*OPERACIÓN*/}
-              <Route element={<ProtectedRoute allowedRoles={["OPERADOR", "SUPERVISOR", "ADMIN"]} />}>
+              {/* DASHBOARDS POR PERMISO */}
+              <Route
+                element={
+                  <ProtectedRoute allowedPermissions={["DASHBOARD_GENERAL"]} />
+                }
+              >
+                <Route path="/dashboard-general" element={<DashboardGeneralPage />} />
+              </Route>
+
+              <Route
+                element={
+                  <ProtectedRoute allowedPermissions={["DASHBOARD_BL"]} />
+                }
+              >
+                <Route path="/shipments-dashboard" element={<ShipmentDashboardPage />} />
+              </Route>
+
+              <Route
+                element={
+                  <ProtectedRoute allowedPermissions={["ALERTAS"]} />
+                }
+              >
+                <Route path="/alerts" element={<AlertsPage />} />
+              </Route>
+
+              {/* OPERACIÓN */}
+              <Route
+                element={
+                  <ProtectedRoute
+                    allowedRoles={["OPERADOR", "SUPERVISOR", "ADMIN"]}
+                  />
+                }
+              >
                 <Route path="/reception" element={<ReceptionPage />} />
                 <Route path="/parking-map" element={<ParkingMapPage />} />
                 <Route path="/dispatch-direct" element={<DirectDispatchPage />} />
                 <Route path="/dispatch-yard" element={<YardDispatchPage />} />
               </Route>
 
-              {/*DOCUMENTACIÓN*/}
-              <Route element={<ProtectedRoute allowedRoles={["CONTROL_DOCUMENTO", "ADMIN"]} />}>
+              {/* DOCUMENTACIÓN */}
+              <Route
+                element={
+                  <ProtectedRoute
+                    allowedRoles={["CONTROL_DOCUMENTO", "ADMIN"]}
+                  />
+                }
+              >
                 <Route path="/upload" element={<UploadPage />} />
               </Route>
 
-              {/*SUPERVISIÓN*/}
-              <Route element={<ProtectedRoute allowedRoles={["SUPERVISOR", "ADMIN"]} />}>
+              {/* SUPERVISIÓN */}
+              <Route
+                element={
+                  <ProtectedRoute allowedRoles={["SUPERVISOR", "ADMIN"]} />
+                }
+              >
                 <Route path="/logistics" element={<LogisticsPage />} />
               </Route>
 
-              {/*ADMIN*/}
+              {/* ADMIN */}
               <Route element={<ProtectedRoute allowedRoles={["ADMIN"]} />}>
-                <Route path="/dashboard-general" element={<DashboardGeneralPage />} />
                 <Route path="/carriers" element={<CarriersPage />} />
-                <Route path="/alerts" element={<AlertsPage />} />
                 <Route path="/users" element={<UsersPage />} />
               </Route>
-
             </Route>
           </Route>
-
         </Routes>
       </BrowserRouter>
     </AuthProvider>
