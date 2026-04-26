@@ -13,6 +13,7 @@ const links = [
   { to: "/reception", label: "Recepción" },
   { to: "/parking-map", label: "Mapa de posiciones" },
   { to: "/logistics", label: "Logística" },
+  { to: "/carriers", label: "Porteadores" },
 ];
 
 export default function Sidebar({
