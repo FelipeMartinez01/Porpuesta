@@ -37,7 +37,7 @@ app = FastAPI(title="Control Vehiculos API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://.*:5173",
+    allow_origin_regex=r"https://.*\.trycloudflare\.com|http://.*:5173",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

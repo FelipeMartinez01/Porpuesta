@@ -57,16 +57,6 @@ export default function YardDispatchPage() {
   }, [searchValue]);
 
   const handleOpenScanner = () => {
-    const isSecure =
-      window.isSecureContext ||
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-
-    if (!isSecure) {
-      alert("La cámara en vivo requiere HTTPS. Por ahora usa búsqueda manual por VIN.");
-      return;
-    }
-
     setScannerOpen(true);
   };
 
@@ -78,12 +68,12 @@ export default function YardDispatchPage() {
 
   const handleDispatch = async () => {
     if (!selectedVehicle) {
-      alert("Selecciona un vehículo para despachar");
+      alert("Selecciona un vehículo para enviar a tránsito");
       return;
     }
 
     const confirmed = confirm(
-      `¿Confirmas despachar desde patio el vehículo con VIN ${selectedVehicle.vin}?`
+      `¿Confirmas enviar a tránsito el vehículo con VIN ${selectedVehicle.vin}?`
     );
 
     if (!confirmed) return;
@@ -95,18 +85,14 @@ export default function YardDispatchPage() {
         status: "EN_TRANSITO",
       });
 
-      await api.patch(`/vehicles/${selectedVehicle.id}/status`, {
-        status: "DESPACHADO",
-      });
-
-      alert("Vehículo despachado correctamente y slot liberado");
+      alert("Vehículo enviado a tránsito correctamente y slot liberado");
 
       setSearchValue("");
       setSelectedVehicle(null);
       await fetchStoredVehicles();
     } catch (error) {
-      console.error("Error despachando vehículo desde patio", error);
-      alert("No se pudo despachar el vehículo desde patio");
+      console.error("Error enviando vehículo a tránsito desde patio", error);
+      alert("No se pudo enviar el vehículo a tránsito desde patio");
     } finally {
       setDispatching(false);
     }
@@ -118,7 +104,7 @@ export default function YardDispatchPage() {
         <div>
           <h1 style={styles.title}>Despacho desde Patio</h1>
           <p style={styles.subtitle}>
-            Busca vehículos ALMACENADOS por VIN parcial o cámara, despáchalos y libera su ubicación.
+            Busca vehículos ALMACENADOS por VIN parcial o cámara, envíalos a tránsito y libera su ubicación.
           </p>
         </div>
       </div>
@@ -172,7 +158,9 @@ export default function YardDispatchPage() {
                     {vehicle.brand ?? "-"} {vehicle.model ?? ""}
                   </span>
                   <small>
-                    BL: {vehicle.shipment_bl ?? "-"} · Sector:{" "}
+                    BL: {vehicle.shipment_bl ?? "-"} · Nave:{" "}
+                    {vehicle.vessel_name ?? "-"} · Viaje:{" "}
+                    {vehicle.voyage_number ?? "-"} · Sector:{" "}
                     {vehicle.sector_name ?? "-"} · Slot: {vehicle.slot_id ?? "-"}
                   </small>
                 </button>
@@ -182,7 +170,7 @@ export default function YardDispatchPage() {
         </div>
 
         <div style={styles.card}>
-          <h2 style={styles.sectionTitle}>Detalle para despacho</h2>
+          <h2 style={styles.sectionTitle}>Detalle para envío a tránsito</h2>
 
           {!selectedVehicle ? (
             <div style={styles.empty}>Selecciona un vehículo de la lista.</div>
@@ -192,6 +180,8 @@ export default function YardDispatchPage() {
                 <Detail label="VIN" value={selectedVehicle.vin} />
                 <Detail label="Estado" value={selectedVehicle.status} />
                 <Detail label="BL" value={selectedVehicle.shipment_bl ?? "-"} />
+                <Detail label="Nave" value={selectedVehicle.vessel_name ?? "-"} />
+                <Detail label="Viaje" value={selectedVehicle.voyage_number ?? "-"} />
                 <Detail label="Marca" value={selectedVehicle.brand ?? "-"} />
                 <Detail label="Modelo" value={selectedVehicle.model ?? "-"} />
                 <Detail label="Color" value={selectedVehicle.color ?? "-"} />
@@ -205,7 +195,7 @@ export default function YardDispatchPage() {
                 onClick={handleDispatch}
                 disabled={dispatching}
               >
-                {dispatching ? "Despachando..." : "Despachar y liberar slot"}
+                {dispatching ? "Enviando..." : "Enviar a tránsito y liberar slot"}
               </button>
             </>
           )}
