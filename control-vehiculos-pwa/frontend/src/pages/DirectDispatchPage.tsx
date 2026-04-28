@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
+import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import VinScanner from "../components/VinScanner";
 import type { Vehicle } from "../types/vehicle";
-import { useLocation } from "react-router-dom";
 
 export default function DirectDispatchPage() {
   const location = useLocation();
@@ -16,66 +17,78 @@ export default function DirectDispatchPage() {
   const [loading, setLoading] = useState(false);
   const [dispatching, setDispatching] = useState(false);
 
-  const fetchDirectVehicles = async (vinValue: string = "") => {
+  const getLocationText = (vehicle: Vehicle) => {
+    if (vehicle.location_label) {
+      return vehicle.location_label;
+    }
+
+    if (vehicle.sector_name && vehicle.slot_code) {
+      return `${vehicle.sector_name} - ${vehicle.slot_code}`;
+    }
+
+    if (vehicle.slot_code) {
+      return vehicle.slot_code;
+    }
+
+    return "-";
+  };
+
+  const fetchDispatchableVehicles = async (vinValue: string = "") => {
     try {
       setLoading(true);
 
-      const params: Record<string, string> = {
-        status: "DIRECTO",
-      };
+      const params: Record<string, string> = {};
 
       if (vinValue.trim()) {
         params.vin = vinValue.trim();
       }
 
-      const response = await api.get<Vehicle[]>("/vehicles/", { params });
-      setVehicles(response.data);
+      const [directResponse, transitResponse] = await Promise.all([
+        api.get<Vehicle[]>("/vehicles/", {
+          params: { ...params, status: "DIRECTO" },
+        }),
+        api.get<Vehicle[]>("/vehicles/", {
+          params: { ...params, status: "EN_TRANSITO" },
+        }),
+      ]);
 
-      if (response.data.length === 1) {
-        setSelectedVehicle(response.data[0]);
+      const merged = [...directResponse.data, ...transitResponse.data];
+
+      setVehicles(merged);
+
+      if (merged.length === 1) {
+        setSelectedVehicle(merged[0]);
       } else {
         setSelectedVehicle(null);
       }
     } catch (error) {
-      console.error("Error buscando vehículos directos", error);
-      alert("No se pudieron cargar los vehículos directos");
+      console.error("Error buscando vehículos para despacho", error);
+      alert("No se pudieron cargar los vehículos para despacho");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDirectVehicles(initialSearchVin);
+    fetchDispatchableVehicles(initialSearchVin);
   }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      fetchDirectVehicles(searchValue);
+      fetchDispatchableVehicles(searchValue);
     }, 350);
 
     return () => clearTimeout(timeout);
   }, [searchValue]);
 
   const handleOpenScanner = () => {
-    const isSecure =
-      window.isSecureContext ||
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-
-    if (!isSecure) {
-      alert(
-        "La cámara en vivo requiere HTTPS. Por ahora usa búsqueda manual por VIN."
-      );
-      return;
-    }
-
     setScannerOpen(true);
   };
 
   const handleDetected = async (decodedText: string) => {
     setScannerOpen(false);
     setSearchValue(decodedText);
-    await fetchDirectVehicles(decodedText);
+    await fetchDispatchableVehicles(decodedText);
   };
 
   const handleDispatch = async () => {
@@ -101,7 +114,7 @@ export default function DirectDispatchPage() {
 
       setSearchValue("");
       setSelectedVehicle(null);
-      await fetchDirectVehicles();
+      await fetchDispatchableVehicles();
     } catch (error) {
       console.error("Error despachando vehículo", error);
       alert("No se pudo despachar el vehículo");
@@ -114,9 +127,10 @@ export default function DirectDispatchPage() {
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Despacho Directo</h1>
+          <h1 style={styles.title}>Despacho Directo / Tránsito</h1>
           <p style={styles.subtitle}>
-            Busca vehículos en estado DIRECTO por VIN parcial o cámara y márcalos como despachados.
+            Busca vehículos en estado DIRECTO o EN_TRANSITO por VIN parcial o
+            cámara y márcalos como despachados.
           </p>
         </div>
       </div>
@@ -151,11 +165,12 @@ export default function DirectDispatchPage() {
 
       <div style={styles.layout}>
         <div style={styles.card}>
-          <h2 style={styles.sectionTitle}>Coincidencias DIRECTO</h2>
+          <h2 style={styles.sectionTitle}>Coincidencias DIRECTO / EN_TRANSITO</h2>
 
           {vehicles.length === 0 ? (
             <div style={styles.empty}>
-              No hay vehículos directos que coincidan con la búsqueda.
+              No hay vehículos directos o en tránsito que coincidan con la
+              búsqueda.
             </div>
           ) : (
             <div style={styles.list}>
@@ -171,12 +186,18 @@ export default function DirectDispatchPage() {
                   onClick={() => setSelectedVehicle(vehicle)}
                 >
                   <strong>{vehicle.vin}</strong>
+
                   <span>
                     {vehicle.brand ?? "-"} {vehicle.model ?? ""}
                   </span>
+
                   <small>
-                    BL: {vehicle.shipment_bl ?? "-"} · Porteador:{" "}
-                    {vehicle.carrier_name ?? "-"}
+                    Estado: {vehicle.status} · BL:{" "}
+                    {vehicle.shipment_bl ?? "-"} · Nave:{" "}
+                    {vehicle.vessel_name ?? "-"} · Viaje:{" "}
+                    {vehicle.voyage_number ?? "-"} · Porteador:{" "}
+                    {vehicle.carrier_name ?? "-"} · Ubicación:{" "}
+                    {getLocationText(vehicle)}
                   </small>
                 </button>
               ))}
@@ -195,11 +216,19 @@ export default function DirectDispatchPage() {
                 <Detail label="VIN" value={selectedVehicle.vin} />
                 <Detail label="Estado" value={selectedVehicle.status} />
                 <Detail label="BL" value={selectedVehicle.shipment_bl ?? "-"} />
+                <Detail label="Nave" value={selectedVehicle.vessel_name ?? "-"} />
+                <Detail label="Viaje" value={selectedVehicle.voyage_number ?? "-"} />
                 <Detail label="Marca" value={selectedVehicle.brand ?? "-"} />
                 <Detail label="Modelo" value={selectedVehicle.model ?? "-"} />
                 <Detail label="Color" value={selectedVehicle.color ?? "-"} />
-                <Detail label="Porteador" value={selectedVehicle.carrier_name ?? "-"} />
-                <Detail label="Sector" value={selectedVehicle.sector_name ?? "-"} />
+                <Detail
+                  label="Porteador"
+                  value={selectedVehicle.carrier_name ?? "-"}
+                />
+                <Detail
+                  label="Ubicación"
+                  value={getLocationText(selectedVehicle)}
+                />
               </div>
 
               <button
@@ -226,7 +255,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   page: {
     padding: "24px",
     maxWidth: "1440px",
@@ -287,10 +316,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   layout: {
     display: "grid",
-    gridTemplateColumns:
-      window.innerWidth < 980
-        ? "1fr"
-        : "minmax(0, 1.4fr) minmax(320px, 0.8fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
     gap: "20px",
     alignItems: "start",
   },

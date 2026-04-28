@@ -70,6 +70,10 @@ class VehicleResponse(BaseModel):
     sector_id: int | None = None
     slot_id: int | None = None
 
+    # 🔥 NUEVO
+    slot_code: str | None = None
+    location_label: str | None = None
+
     status: str
     photo_url: str | None = None
     notes: str | None = None

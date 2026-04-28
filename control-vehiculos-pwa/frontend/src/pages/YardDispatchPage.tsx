@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import VinScanner from "../components/VinScanner";
@@ -15,6 +16,18 @@ export default function YardDispatchPage() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dispatching, setDispatching] = useState(false);
+
+  const getLocationText = (vehicle: Vehicle) => {
+    if (vehicle.sector_name && vehicle.slot_code) {
+      return `${vehicle.sector_name} - ${vehicle.slot_code}`;
+    }
+
+    if (vehicle.slot_code) {
+      return vehicle.slot_code;
+    }
+
+    return "-";
+  };
 
   const fetchStoredVehicles = async (vinValue: string = "") => {
     try {
@@ -85,7 +98,7 @@ export default function YardDispatchPage() {
         status: "EN_TRANSITO",
       });
 
-      alert("Vehículo enviado a tránsito correctamente y slot liberado");
+      alert("Vehículo enviado a tránsito correctamente y ubicación liberada");
 
       setSearchValue("");
       setSelectedVehicle(null);
@@ -104,7 +117,8 @@ export default function YardDispatchPage() {
         <div>
           <h1 style={styles.title}>Despacho desde Patio</h1>
           <p style={styles.subtitle}>
-            Busca vehículos ALMACENADOS por VIN parcial o cámara, envíalos a tránsito y libera su ubicación.
+            Busca vehículos ALMACENADOS por VIN parcial o cámara, envíalos a
+            tránsito y libera su ubicación.
           </p>
         </div>
       </div>
@@ -131,7 +145,10 @@ export default function YardDispatchPage() {
       </div>
 
       {scannerOpen ? (
-        <VinScanner onDetected={handleDetected} onClose={() => setScannerOpen(false)} />
+        <VinScanner
+          onDetected={handleDetected}
+          onClose={() => setScannerOpen(false)}
+        />
       ) : null}
 
       <div style={styles.layout}>
@@ -149,19 +166,23 @@ export default function YardDispatchPage() {
                   key={vehicle.id}
                   style={{
                     ...styles.vehicleItem,
-                    ...(selectedVehicle?.id === vehicle.id ? styles.vehicleItemActive : {}),
+                    ...(selectedVehicle?.id === vehicle.id
+                      ? styles.vehicleItemActive
+                      : {}),
                   }}
                   onClick={() => setSelectedVehicle(vehicle)}
                 >
                   <strong>{vehicle.vin}</strong>
+
                   <span>
                     {vehicle.brand ?? "-"} {vehicle.model ?? ""}
                   </span>
+
                   <small>
                     BL: {vehicle.shipment_bl ?? "-"} · Nave:{" "}
                     {vehicle.vessel_name ?? "-"} · Viaje:{" "}
-                    {vehicle.voyage_number ?? "-"} · Sector:{" "}
-                    {vehicle.sector_name ?? "-"} · Slot: {vehicle.slot_id ?? "-"}
+                    {vehicle.voyage_number ?? "-"} · Ubicación:{" "}
+                    {getLocationText(vehicle)}
                   </small>
                 </button>
               ))}
@@ -185,9 +206,14 @@ export default function YardDispatchPage() {
                 <Detail label="Marca" value={selectedVehicle.brand ?? "-"} />
                 <Detail label="Modelo" value={selectedVehicle.model ?? "-"} />
                 <Detail label="Color" value={selectedVehicle.color ?? "-"} />
-                <Detail label="Porteador" value={selectedVehicle.carrier_name ?? "-"} />
-                <Detail label="Sector" value={selectedVehicle.sector_name ?? "-"} />
-                <Detail label="Slot ID" value={String(selectedVehicle.slot_id ?? "-")} />
+                <Detail
+                  label="Porteador"
+                  value={selectedVehicle.carrier_name ?? "-"}
+                />
+                <Detail
+                  label="Ubicación"
+                  value={getLocationText(selectedVehicle)}
+                />
               </div>
 
               <button
@@ -195,7 +221,9 @@ export default function YardDispatchPage() {
                 onClick={handleDispatch}
                 disabled={dispatching}
               >
-                {dispatching ? "Enviando..." : "Enviar a tránsito y liberar slot"}
+                {dispatching
+                  ? "Enviando..."
+                  : "Enviar a tránsito y liberar ubicación"}
               </button>
             </>
           )}
@@ -214,7 +242,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   page: {
     padding: "24px",
     maxWidth: "1440px",
@@ -275,8 +303,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   layout: {
     display: "grid",
-    gridTemplateColumns:
-      window.innerWidth < 980 ? "1fr" : "minmax(0, 1.4fr) minmax(320px, 0.8fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
     gap: "20px",
     alignItems: "start",
   },

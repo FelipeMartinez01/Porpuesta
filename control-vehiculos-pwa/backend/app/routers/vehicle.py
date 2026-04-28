@@ -38,6 +38,7 @@ def vehicle_load_options():
     return (
         joinedload(Vehicle.carrier),
         joinedload(Vehicle.sector),
+        joinedload(Vehicle.slot),
         joinedload(Vehicle.shipment)
         .joinedload(Shipment.voyage)
         .joinedload(Voyage.vessel),
@@ -77,6 +78,20 @@ def build_vehicle_response(vehicle: Vehicle) -> VehicleResponse:
     voyage = shipment.voyage if shipment else None
     vessel = voyage.vessel if voyage else None
 
+    sector = vehicle.sector
+    slot = vehicle.slot
+
+    sector_name = sector.name if sector else None
+    slot_code = slot.code if slot else None
+
+    location_label = None
+    if sector_name and slot_code:
+        location_label = f"{sector_name} - {slot_code}"
+    elif slot_code:
+        location_label = slot_code
+    elif sector_name:
+        location_label = sector_name
+
     return VehicleResponse(
         id=vehicle.id,
         vin=vehicle.vin,
@@ -92,13 +107,15 @@ def build_vehicle_response(vehicle: Vehicle) -> VehicleResponse:
         carrier_id=vehicle.carrier_id,
         sector_id=vehicle.sector_id,
         slot_id=vehicle.slot_id,
+        slot_code=slot_code,
+        location_label=location_label,
         status=vehicle.status,
         photo_url=vehicle.photo_url,
         notes=vehicle.notes,
         created_at=vehicle.created_at,
         updated_at=vehicle.updated_at,
         carrier_name=vehicle.carrier.name if vehicle.carrier else None,
-        sector_name=vehicle.sector.name if vehicle.sector else None,
+        sector_name=sector_name,
     )
 
 

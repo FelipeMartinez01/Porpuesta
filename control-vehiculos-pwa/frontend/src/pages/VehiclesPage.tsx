@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import VehicleFilters from "../components/VehicleFilters";
@@ -75,6 +76,10 @@ export default function VehiclesPage() {
   };
 
   const handleDeleteVehicle = async (vehicleId: number) => {
+    const confirmed = confirm("¿Confirmas eliminar este vehículo?");
+
+    if (!confirmed) return;
+
     try {
       await api.delete(`/vehicles/${vehicleId}`);
       await fetchVehicles();
@@ -105,6 +110,7 @@ export default function VehiclesPage() {
       setVehicles(response.data);
     } catch (error) {
       console.error("Error limpiando filtros", error);
+      alert("No se pudieron limpiar los filtros");
     } finally {
       setLoading(false);
     }
@@ -120,7 +126,9 @@ export default function VehiclesPage() {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>Visualización de Vehículos</h1>
-          <p style={styles.subtitle}>Consulta y gestiona los vehículos.</p>
+          <p style={styles.subtitle}>
+            Consulta, filtra y gestiona los vehículos registrados.
+          </p>
         </div>
 
         <div style={styles.headerActions}>
@@ -196,16 +204,20 @@ export default function VehiclesPage() {
           await fetchVehicles();
 
           if (editingVehicle) {
-            const updated = await api.get<Vehicle>(`/vehicles/${editingVehicle.id}`);
+            const updated = await api.get<Vehicle>(
+              `/vehicles/${editingVehicle.id}`
+            );
             setSelectedVehicle(updated.data);
           }
+
+          setEditingVehicle(null);
         }}
       />
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   page: {
     padding: "20px",
     maxWidth: "1440px",
@@ -253,13 +265,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   loading: {
     marginBottom: "16px",
+    color: "#6b7280",
   },
   layout: {
     display: "grid",
-    gridTemplateColumns:
-      window.innerWidth < 980
-        ? "1fr"
-        : "minmax(0, 2fr) minmax(300px, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
     gap: "20px",
     alignItems: "start",
   },

@@ -19,6 +19,10 @@ export type Vehicle = {
   sector_id?: number | null;
   slot_id?: number | null;
 
+  // Ubicación legible
+  slot_code?: string | null;
+  location_label?: string | null;
+
   status: string;
   photo_url?: string | null;
   notes?: string | null;

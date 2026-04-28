@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../api/client";
 import ParkingGrid from "../components/ParkingGrid";
@@ -15,30 +16,41 @@ export default function ParkingMapPage() {
 
   const [slots, setSlots] = useState<ParkingSlot[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicleSearch, setVehicleSearch] = useState(initialSearchVin);
+  const [vehicleSuggestionsOpen, setVehicleSuggestionsOpen] = useState(false);
+
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selectedSectorId, setSelectedSectorId] = useState("1");
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+
   const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
   const [selectedSlotVehicle, setSelectedSlotVehicle] =
     useState<SlotVehicleInfo | null>(null);
-  const [slotVehicles, setSlotVehicles] = useState<Record<number, SlotVehicleInfo>>({});
+
+  const [slotVehicles, setSlotVehicles] = useState<
+    Record<number, SlotVehicleInfo>
+  >({});
   const [loading, setLoading] = useState(false);
 
   const [mapSearch, setMapSearch] = useState(initialSearchVin);
   const [slotFilter, setSlotFilter] = useState<SlotFilter>("TODOS");
-  const [highlightedSlotId, setHighlightedSlotId] = useState<number | null>(null);
+  const [highlightedSlotId, setHighlightedSlotId] = useState<number | null>(
+    null
+  );
 
   const fetchData = async (sectorId: string) => {
     try {
-      const [slotsResponse, vehiclesResponse, sectorsResponse] = await Promise.all([
-        api.get<ParkingSlot[]>("/parking-slots/", {
-          params: { sector_id: Number(sectorId) },
-        }),
-        api.get<Vehicle[]>("/vehicles/", {
-          params: { status: "ALMACENADO" },
-        }),
-        api.get<Sector[]>("/sectors/"),
-      ]);
+      const [slotsResponse, vehiclesResponse, sectorsResponse] =
+        await Promise.all([
+          api.get<ParkingSlot[]>("/parking-slots/", {
+            params: { sector_id: Number(sectorId) },
+          }),
+          api.get<Vehicle[]>("/vehicles/", {
+            params: { status: "ALMACENADO" },
+          }),
+          api.get<Sector[]>("/sectors/"),
+        ]);
 
       setSlots(slotsResponse.data);
       setVehicles(vehiclesResponse.data);
@@ -87,6 +99,23 @@ export default function ParkingMapPage() {
   }, [selectedSectorId]);
 
   useEffect(() => {
+    if (!initialSearchVin.trim()) return;
+    if (vehicles.length === 0) return;
+
+    const foundVehicle = vehicles.find(
+      (item) =>
+        item.vin.toLowerCase() === initialSearchVin.trim().toLowerCase()
+    );
+
+    if (!foundVehicle) return;
+
+    setSelectedVehicle(foundVehicle);
+    setSelectedVehicleId(String(foundVehicle.id));
+    setVehicleSearch(foundVehicle.vin);
+    setVehicleSuggestionsOpen(false);
+  }, [vehicles, initialSearchVin]);
+
+  useEffect(() => {
     if (!mapSearch.trim()) return;
     if (Object.keys(slotVehicles).length === 0) return;
 
@@ -97,13 +126,39 @@ export default function ParkingMapPage() {
     return () => clearTimeout(timeout);
   }, [slotVehicles]);
 
+  const filteredVehicleSuggestions = useMemo(() => {
+    const search = vehicleSearch.trim().toLowerCase();
+
+    if (search.length < 3) return [];
+
+    return vehicles
+      .filter((vehicle) => {
+        const vin = vehicle.vin.toLowerCase();
+        const brand = (vehicle.brand ?? "").toLowerCase();
+        const model = (vehicle.model ?? "").toLowerCase();
+        const bl = (vehicle.shipment_bl ?? "").toLowerCase();
+
+        return (
+          vin.includes(search) ||
+          brand.includes(search) ||
+          model.includes(search) ||
+          bl.includes(search)
+        );
+      })
+      .slice(0, 10);
+  }, [vehicles, vehicleSearch]);
+
   const stats = useMemo(() => {
     const total = slots.length;
     const disponibles = slots.filter(
       (slot) => slot.visual_status === "DISPONIBLE"
     ).length;
-    const ocupados = slots.filter((slot) => slot.visual_status === "OCUPADO").length;
-    const salida = slots.filter((slot) => slot.visual_status === "SALIDA").length;
+    const ocupados = slots.filter(
+      (slot) => slot.visual_status === "OCUPADO"
+    ).length;
+    const salida = slots.filter(
+      (slot) => slot.visual_status === "SALIDA"
+    ).length;
     const ocupacion = total === 0 ? 0 : Math.round((ocupados / total) * 100);
 
     return {
@@ -120,12 +175,21 @@ export default function ParkingMapPage() {
     return slots.filter((slot) => slot.visual_status === slotFilter);
   }, [slots, slotFilter]);
 
+  const handleSelectStoredVehicle = (vehicle: Vehicle) => {
+    setSelectedVehicle(vehicle);
+    setSelectedVehicleId(String(vehicle.id));
+    setVehicleSearch(vehicle.vin);
+    setVehicleSuggestionsOpen(false);
+  };
+
   const handleSearchInMap = (showAlert = true) => {
     if (!mapSearch.trim()) {
       setHighlightedSlotId(null);
+
       if (showAlert) {
         alert("Ingresa parte del VIN para buscar en el mapa");
       }
+
       return;
     }
 
@@ -164,12 +228,12 @@ export default function ParkingMapPage() {
     }
 
     if (!selectedSlot) {
-      alert("Debes seleccionar un slot");
+      alert("Debes seleccionar una ubicación");
       return;
     }
 
     if (selectedSlot.visual_status === "OCUPADO") {
-      alert("Ese slot ya está ocupado");
+      alert("Esa ubicación ya está ocupada");
       return;
     }
 
@@ -183,12 +247,16 @@ export default function ParkingMapPage() {
       alert("Ubicación asignada correctamente.");
 
       setSelectedVehicleId("");
+      setSelectedVehicle(null);
+      setVehicleSearch("");
       setSelectedSlot(null);
       setSelectedSlotVehicle(null);
       setHighlightedSlotId(null);
+      setMapSearch("");
+
       await fetchData(selectedSectorId);
     } catch (error) {
-      console.error("Error asignando slot", error);
+      console.error("Error asignando ubicación", error);
       alert("No se pudo asignar la ubicación");
     } finally {
       setLoading(false);
@@ -197,7 +265,7 @@ export default function ParkingMapPage() {
 
   const handleResetMap = async () => {
     const confirmReset = confirm(
-      "¿Seguro que quieres limpiar todo el mapa? Esto dejará todos los slots disponibles y quitará la ubicación asignada a los vehículos."
+      "¿Seguro que quieres limpiar todo el mapa? Esto dejará todos los espacios disponibles y quitará la ubicación asignada a los vehículos."
     );
 
     if (!confirmReset) return;
@@ -208,6 +276,8 @@ export default function ParkingMapPage() {
       await api.post("/parking-slots/reset");
 
       setSelectedVehicleId("");
+      setSelectedVehicle(null);
+      setVehicleSearch("");
       setSelectedSlot(null);
       setSelectedSlotVehicle(null);
       setSlotVehicles({});
@@ -246,13 +316,23 @@ export default function ParkingMapPage() {
   return (
     <div style={styles.page}>
       <h1 style={styles.title}>Mapa de Posiciones</h1>
+
       <p style={styles.subtitle}>
-        Control visual del patio, búsqueda de vehículos y asignación de posiciones.
+        Control visual del patio, búsqueda de vehículos y asignación de
+        ubicaciones.
       </p>
+
+      {initialSearchVin ? (
+        <div style={styles.arrivalNotice}>
+          Vehículo enviado desde recepción: <strong>{initialSearchVin}</strong>.
+          Selecciona una ubicación disponible en el mapa y presiona{" "}
+          <strong>Asignar ubicación</strong>.
+        </div>
+      ) : null}
 
       <div style={styles.kpiGrid}>
         <div style={styles.kpiCard}>
-          <span>Total slots</span>
+          <span>Total ubicaciones</span>
           <strong>{stats.total}</strong>
         </div>
 
@@ -262,7 +342,7 @@ export default function ParkingMapPage() {
         </div>
 
         <div style={styles.kpiCard}>
-          <span>Ocupados</span>
+          <span>Ocupadas</span>
           <strong>{stats.ocupados}</strong>
         </div>
 
@@ -276,6 +356,7 @@ export default function ParkingMapPage() {
         <div style={styles.formRow}>
           <div style={styles.field}>
             <label style={styles.label}>Sector</label>
+
             <select
               style={styles.input}
               value={selectedSectorId}
@@ -294,24 +375,63 @@ export default function ParkingMapPage() {
             </select>
           </div>
 
-          <div style={styles.field}>
+          <div style={{ ...styles.field, position: "relative" }}>
             <label style={styles.label}>Vehículo almacenado</label>
-            <select
+
+            <input
               style={styles.input}
-              value={selectedVehicleId}
-              onChange={(e) => setSelectedVehicleId(e.target.value)}
-            >
-              <option value="">Selecciona un vehículo</option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.vin} - {vehicle.brand ?? "-"} {vehicle.model ?? ""}
-                </option>
-              ))}
-            </select>
+              value={vehicleSearch}
+              onFocus={() => setVehicleSuggestionsOpen(true)}
+              onChange={(e) => {
+                setVehicleSearch(e.target.value);
+                setSelectedVehicleId("");
+                setSelectedVehicle(null);
+                setVehicleSuggestionsOpen(true);
+              }}
+              placeholder="Buscar VIN, marca, modelo o BL"
+              autoComplete="off"
+            />
+
+            {vehicleSuggestionsOpen && vehicleSearch.trim().length >= 3 ? (
+              <div style={styles.suggestionBox}>
+                {filteredVehicleSuggestions.length === 0 ? (
+                  <div style={styles.suggestionEmpty}>
+                    No hay vehículos almacenados disponibles.
+                  </div>
+                ) : (
+                  filteredVehicleSuggestions.map((vehicle) => (
+                    <button
+                      key={vehicle.id}
+                      type="button"
+                      style={styles.suggestionItem}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelectStoredVehicle(vehicle);
+                      }}
+                    >
+                      <strong>{vehicle.vin}</strong>
+
+                      <span>
+                        {vehicle.brand ?? "-"} {vehicle.model ?? ""} · BL:{" "}
+                        {vehicle.shipment_bl ?? "-"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+
+            {selectedVehicle ? (
+              <div style={styles.selectedVehicleBox}>
+                <strong>Seleccionado:</strong> {selectedVehicle.vin} ·{" "}
+                {selectedVehicle.brand ?? "-"} {selectedVehicle.model ?? ""}
+              </div>
+            ) : null}
           </div>
 
           <div style={styles.field}>
-            <label style={styles.label}>Slot seleccionado</label>
+            <label style={styles.label}>Ubicación seleccionada</label>
+
             <input
               style={styles.input}
               value={selectedSlot?.code ?? ""}
@@ -326,7 +446,11 @@ export default function ParkingMapPage() {
             {loading ? "Asignando..." : "Asignar ubicación"}
           </button>
 
-          <button style={styles.dangerButton} onClick={handleResetMap} disabled={loading}>
+          <button
+            style={styles.dangerButton}
+            onClick={handleResetMap}
+            disabled={loading}
+          >
             Limpiar mapa
           </button>
         </div>
@@ -368,10 +492,12 @@ export default function ParkingMapPage() {
 
       {selectedSlot ? (
         <div style={styles.card}>
-          <h3 style={styles.sectionTitle}>Detalle del slot</h3>
+          <h3 style={styles.sectionTitle}>Detalle de ubicación</h3>
+
           <p>
-            <strong>Slot:</strong> {selectedSlot.code}
+            <strong>Ubicación:</strong> {selectedSlot.code}
           </p>
+
           <p>
             <strong>Estado visual:</strong> {selectedSlot.visual_status}
           </p>
@@ -381,19 +507,24 @@ export default function ParkingMapPage() {
               <p>
                 <strong>VIN:</strong> {selectedSlotVehicle.vin}
               </p>
+
               <p>
                 <strong>Estado vehículo:</strong> {selectedSlotVehicle.status}
               </p>
+
               <p>
-                <strong>Porteador:</strong> {selectedSlotVehicle.carrier_name ?? "-"}
+                <strong>Porteador:</strong>{" "}
+                {selectedSlotVehicle.carrier_name ?? "-"}
               </p>
+
               <p>
-                <strong>Marca / Modelo:</strong> {selectedSlotVehicle.brand ?? "-"}{" "}
+                <strong>Marca / Modelo:</strong>{" "}
+                {selectedSlotVehicle.brand ?? "-"}{" "}
                 {selectedSlotVehicle.model ?? ""}
               </p>
             </>
           ) : (
-            <p>Este slot no tiene vehículo asociado.</p>
+            <p>Esta ubicación no tiene vehículo asociado.</p>
           )}
         </div>
       ) : null}
@@ -411,7 +542,7 @@ export default function ParkingMapPage() {
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   page: {
     padding: "24px",
   },
@@ -424,6 +555,14 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 0,
     marginBottom: "20px",
     color: "#6b7280",
+  },
+  arrivalNotice: {
+    background: "#ecfdf5",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    borderRadius: "14px",
+    padding: "14px 16px",
+    marginBottom: "20px",
   },
   kpiGrid: {
     display: "grid",
@@ -496,6 +635,46 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "10px",
     border: "1px solid #d1d5db",
     fontSize: "14px",
+  },
+  suggestionBox: {
+    position: "absolute",
+    top: "76px",
+    left: 0,
+    right: 0,
+    background: "#fff",
+    border: "1px solid #d1d5db",
+    borderRadius: "12px",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.15)",
+    zIndex: 50,
+    maxHeight: "260px",
+    overflowY: "auto",
+  },
+  suggestionItem: {
+    width: "100%",
+    padding: "12px",
+    border: "none",
+    borderBottom: "1px solid #f3f4f6",
+    background: "#fff",
+    textAlign: "left",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    fontSize: "13px",
+  },
+  suggestionEmpty: {
+    padding: "14px",
+    color: "#6b7280",
+    fontSize: "13px",
+  },
+  selectedVehicleBox: {
+    marginTop: "4px",
+    padding: "10px",
+    borderRadius: "10px",
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
+    color: "#166534",
+    fontSize: "13px",
   },
   actions: {
     marginTop: "20px",
